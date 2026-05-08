@@ -713,7 +713,7 @@ function GameReviewContent({ gameId, onReset }) {
     if (!isNaN(moveParam) && moveParam >= 0 && moveParam < positions.length) {
       return moveParam;
     }
-    return 0;
+    return 1;
   });
   const [showSummary, setShowSummary] = useState(false);
   const [chatHistory, setChatHistory] = useState({});
@@ -861,52 +861,48 @@ function GameReviewContent({ gameId, onReset }) {
   );
 
   const controls = (
-    <>
-      <div className="flex items-center justify-between px-4 pt-2 pb-1 gap-2">
-        <button
-          onClick={() => goKeyMoment(-1)}
-          disabled={prevKeyMoment === undefined}
-          className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
-          aria-label="Previous key moment"
-        >
-          ←
-        </button>
-        <div className="text-center flex-1">
-          <div className="text-sm">
-            <span className={`font-semibold tabular-nums ${currentMoment ? "text-zinc-100" : "text-zinc-500"}`}>
-              {counterLabel}
-            </span>
-          </div>
-          <div className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5">{counterSub}</div>
+    <div className="flex items-center justify-between px-4 py-3 gap-1.5">
+      <button
+        onClick={() => goKeyMoment(-1)}
+        disabled={prevKeyMoment === undefined}
+        className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 active:bg-zinc-600 transition-colors text-base font-bold"
+        aria-label="Previous key moment"
+      >
+        «
+      </button>
+      <button
+        onClick={() => stepMove(-1)}
+        disabled={moveIdx === 0}
+        className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 active:bg-zinc-600 transition-colors text-base"
+        aria-label="Previous move"
+      >
+        ‹
+      </button>
+      <div className="text-center flex-1">
+        <div className="text-sm">
+          <span className={`font-semibold tabular-nums ${currentMoment ? "text-zinc-100" : "text-zinc-500"}`}>
+            {counterLabel}
+          </span>
         </div>
-        <button
-          onClick={() => goKeyMoment(1)}
-          disabled={nextKeyMoment === undefined}
-          className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
-          aria-label="Next key moment"
-        >
-          →
-        </button>
+        <div className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5">{counterSub}</div>
       </div>
-      <div className="flex items-center justify-center gap-6 pb-3">
-        <button
-          onClick={() => stepMove(-1)}
-          disabled={moveIdx === 0}
-          className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
-          aria-label="Previous move"
-        >
-          ‹ prev move
-        </button>
-        <button
-          onClick={() => stepMove(1)}
-          disabled={moveIdx === positions.length - 1}
-          className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
-          aria-label="Next move"
-        >
-          next move ›
-        </button>
-      </div>
-    </>
+      <button
+        onClick={() => stepMove(1)}
+        disabled={moveIdx === positions.length - 1}
+        className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 active:bg-zinc-600 transition-colors text-base"
+        aria-label="Next move"
+      >
+        ›
+      </button>
+      <button
+        onClick={() => goKeyMoment(1)}
+        disabled={nextKeyMoment === undefined}
+        className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 active:bg-zinc-600 transition-colors text-base font-bold"
+        aria-label="Next key moment"
+      >
+        »
+      </button>
+    </div>
   );
 
   return (
