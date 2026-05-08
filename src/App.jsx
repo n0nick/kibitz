@@ -1326,17 +1326,29 @@ export default function App() {
       setGameData(parsed);
       setGameId(id);
       setScreen("review");
-      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone);
+      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id);
     } catch (e) {
       setImportError(e.message);
       setScreen("import");
     }
   };
 
-  const runAnalysis = async (game, pgn, key, t) => {
+  const runAnalysis = async (game, pgn, key, t, id) => {
+    const cacheKey = `chess-analysis-${id}-${t}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        setGameData((prev) => mergeAnalysis(prev, JSON.parse(cached)));
+        setAnalysisStatus("done");
+        return;
+      } catch {
+        localStorage.removeItem(cacheKey);
+      }
+    }
     setAnalysisStatus("loading");
     try {
       const result = await analyzeGame(pgn, game.moments, game.summary, game.evals, key, t);
+      localStorage.setItem(cacheKey, JSON.stringify(result));
       setGameData((prev) => mergeAnalysis(prev, result));
       setAnalysisStatus("done");
     } catch (e) {
