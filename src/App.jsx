@@ -1,5 +1,9 @@
-import { useState, useRef, useEffect } from "react";
-import { Chess } from "chess.js";
+import { useState, useRef, useEffect, createContext, useContext } from "react";
+import { parseLichessUrl, fetchLichessGame, parseGame } from "./parseGame";
+
+// ─── Game context ─────────────────────────────────────────────────────────────
+
+const GameContext = createContext(null);
 
 // ─── Piece unicode ────────────────────────────────────────────────────────────
 
@@ -18,9 +22,9 @@ const CLS = {
   blunder:    { label: "Blunder",     icon: "??", bg: "bg-red-500/20",    text: "text-red-400",     border: "border-red-500/40",     dot: "bg-red-400"     },
 };
 
-// ─── PGN + position builder ───────────────────────────────────────────────────
+// ─── Demo game (Opera Game, 1858) ─────────────────────────────────────────────
 
-const PGN = `[Event "Paris Opera"]
+const DEMO_PGN = `[Event "Paris Opera"]
 [Site "Paris FRA"]
 [Date "1858.11.02"]
 [White "Paul Morphy"]
@@ -31,54 +35,35 @@ const PGN = `[Event "Paris Opera"]
 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7
 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8# 1-0`;
 
-function buildPositions(pgn) {
-  const chess = new Chess();
-  chess.loadPgn(pgn);
-  const history = chess.history({ verbose: true });
-  const temp = new Chess();
-  const out = [{ fen: temp.fen(), san: null, color: null }];
-  for (const mv of history) {
-    temp.move(mv.san);
-    out.push({ fen: temp.fen(), san: mv.san, color: mv.color });
-  }
-  return out;
-}
-
-const POSITIONS = buildPositions(PGN);
-
-// ─── Evaluations (mock Stockfish) ─────────────────────────────────────────────
-// Centipawns/100, positive = white advantage. Index matches POSITIONS (0 = start).
-// Source of truth for all eval bars; MOMENTS reference these by moveIdx.
-const EVALS = [
-  0.0,                                           // 0: start
-  0.2, 0.2, 0.3, 0.2, 0.3, 0.1, 0.3, 0.1,     // 1–8
-  0.3, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2,     // 9–16
-  0.2,                                           // 17: 9.Bg5
-  0.8,                                           // 18: 9...b5?!
-  2.1,                                           // 19: 10.Nxb5!!
-  2.6,                                           // 20: 10...cxb5
-  3.0,                                           // 21: 11.Bxb5+
-  3.0,                                           // 22: 11...Nbd7
-  4.2,                                           // 23: 12.O-O-O!
-  4.2,                                           // 24: 12...Rd8
-  6.8,                                           // 25: 13.Rxd7!
-  6.8,                                           // 26: 13...Rxd7
-  7.5,                                           // 27: 14.Rd1
-  7.8,                                           // 28: 14...Qe6
-  8.3,                                           // 29: 15.Bxd7+
-  8.5,                                           // 30: 15...Nxd7
-  99,                                            // 31: 16.Qb8+!!
-  99,                                            // 32: 16...Nxb8
-  99,                                            // 33: 17.Rd8#
+const DEMO_EVALS = [
+  0.0,
+  0.2, 0.2, 0.3, 0.2, 0.3, 0.1, 0.3, 0.1,
+  0.3, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2,
+  0.2,
+  0.8,
+  2.1,
+  2.6,
+  3.0,
+  3.0,
+  4.2,
+  4.2,
+  6.8,
+  6.8,
+  7.5,
+  7.8,
+  8.3,
+  8.5,
+  99,
+  99,
+  99,
 ];
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const SUMMARY = {
+const DEMO_SUMMARY = {
   white: "Paul Morphy",
   black: "Duke Karl / Count Isouard",
   result: "1-0",
   event: "Opera House, Paris · 1858",
+  opening: "Philidor Defense",
   moveCount: 17,
   narrative:
     "Morphy played a textbook lesson in rapid development and open-file domination. The opening was crisp — every piece activated, every move purposeful. The critical sequence began on move 10, when a knight sacrifice ripped open Black's queenside before the opponent could castle. From that point, Black was in freefall — each White move added a new attacker, and the tangled Black pieces could never untangle. The finish, a queen sacrifice on move 16, is among the most celebrated combinations in chess history.",
@@ -86,9 +71,7 @@ const SUMMARY = {
     "Piece activity over material: across the entire game, Morphy sacrificed a knight and two exchanges, but each sacrifice deepened the initiative rather than ceding it. This is the core philosophy of the romantic era — create threats that cannot all be met simultaneously, and the material will follow.",
 };
 
-// moveIdx: 1-indexed position in POSITIONS (0 = start, 1 = after 1.e4, …)
-// White move N = position 2N-1, Black move N = position 2N
-const MOMENTS = [
+const DEMO_MOMENTS = [
   {
     id: 1,
     moveIdx: 18,
@@ -224,8 +207,16 @@ const MOMENTS = [
   },
 ];
 
-const MOMENT_BY_MOVE_IDX = Object.fromEntries(MOMENTS.map((m) => [m.moveIdx, m]));
-const KEY_MOVE_IDXS = MOMENTS.map((m) => m.moveIdx); // already sorted ascending
+const _demoParsed = parseGame(DEMO_PGN);
+const DEMO_GAME = {
+  positions: _demoParsed.positions,
+  summary: DEMO_SUMMARY,
+  evals: DEMO_EVALS,
+  moments: DEMO_MOMENTS,
+  momentByMoveIdx: Object.fromEntries(DEMO_MOMENTS.map((m) => [m.moveIdx, m])),
+  keyMoveIdxs: DEMO_MOMENTS.map((m) => m.moveIdx),
+  hasEvals: true,
+};
 
 // ─── FEN parser ───────────────────────────────────────────────────────────────
 
@@ -366,8 +357,9 @@ function Chip({ classification, small }) {
 // ─── Move timeline ────────────────────────────────────────────────────────────
 
 function MoveChip({ posIdx, moveIdx, setRef, onJump }) {
-  const pos = POSITIONS[posIdx];
-  const moment = MOMENT_BY_MOVE_IDX[posIdx];
+  const { positions, momentByMoveIdx } = useContext(GameContext);
+  const pos = positions[posIdx];
+  const moment = momentByMoveIdx[posIdx];
   const isActive = posIdx === moveIdx;
   const cls = moment ? CLS[moment.classification] : null;
 
@@ -389,6 +381,7 @@ function MoveChip({ posIdx, moveIdx, setRef, onJump }) {
 }
 
 function MoveTimeline({ moveIdx, onJump }) {
+  const { positions } = useContext(GameContext);
   const chipRefs = useRef({});
 
   useEffect(() => {
@@ -400,8 +393,8 @@ function MoveTimeline({ moveIdx, onJump }) {
   }, [moveIdx]);
 
   const pairs = [];
-  for (let w = 1; w < POSITIONS.length; w += 2) {
-    pairs.push({ num: Math.ceil(w / 2), w, b: w + 1 < POSITIONS.length ? w + 1 : null });
+  for (let w = 1; w < positions.length; w += 2) {
+    pairs.push({ num: Math.ceil(w / 2), w, b: w + 1 < positions.length ? w + 1 : null });
   }
 
   return (
@@ -445,14 +438,19 @@ function Chat({ moment, history, setHistory }) {
   const send = () => {
     const q = input.trim();
     if (!q) return;
-    const lq = q.toLowerCase();
-    const lqa = moment.qa.question.toLowerCase();
-    const qaWords = lqa.split(/\W+/).filter((w) => w.length > 4);
-    const overlap = qaWords.filter((w) => lq.includes(w));
-    const answer =
-      overlap.length >= 2
-        ? moment.qa.answer
-        : `(LLM response would appear here — asking about the position after ${moment.moveNumber} ${moment.notation}. In a production version, the coaching engine would analyze your specific question and provide a tailored explanation.)`;
+    let answer;
+    if (moment.qa) {
+      const lq = q.toLowerCase();
+      const lqa = moment.qa.question.toLowerCase();
+      const qaWords = lqa.split(/\W+/).filter((w) => w.length > 4);
+      const overlap = qaWords.filter((w) => lq.includes(w));
+      answer =
+        overlap.length >= 2
+          ? moment.qa.answer
+          : `(LLM response would appear here — asking about the position after ${moment.moveNumber} ${moment.notation}. In a production version, the coaching engine would analyze your specific question and provide a tailored explanation.)`;
+    } else {
+      answer = `(LLM response would appear here — asking about the position after ${moment.moveNumber} ${moment.notation}. In a production version, the coaching engine would analyze your specific question and provide a tailored explanation.)`;
+    }
     setHistory((prev) => ({
       ...prev,
       [moment.id]: [
@@ -466,7 +464,7 @@ function Chat({ moment, history, setHistory }) {
 
   return (
     <div className="mx-4 mb-8">
-      {msgs.length === 0 && (
+      {msgs.length === 0 && moment.qa && (
         <button
           className="w-full text-left text-xs text-zinc-500 bg-zinc-900/50 rounded-xl px-4 py-3 mb-3 border border-zinc-800 hover:border-zinc-700 active:bg-zinc-800 transition-colors"
           onClick={() => setInput(moment.qa.question)}
@@ -518,12 +516,13 @@ function Chat({ moment, history, setHistory }) {
 // ─── Summary screen ───────────────────────────────────────────────────────────
 
 function SummaryContent({ onClose, onJump }) {
+  const { summary, moments } = useContext(GameContext);
   return (
     <>
       <div className="flex items-center justify-between px-4 py-4 bg-zinc-900 border-b border-zinc-800 shrink-0">
         <div>
-          <div className="text-sm font-semibold text-zinc-100">{SUMMARY.white}</div>
-          <div className="text-xs text-zinc-500">vs {SUMMARY.black}</div>
+          <div className="text-sm font-semibold text-zinc-100">{summary.white}</div>
+          <div className="text-xs text-zinc-500">vs {summary.black}</div>
         </div>
         <button
           onClick={onClose}
@@ -535,28 +534,63 @@ function SummaryContent({ onClose, onJump }) {
       <div className="p-4 space-y-4">
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: "Result", value: SUMMARY.result, color: "text-emerald-400" },
-            { label: "Moves", value: SUMMARY.moveCount, color: "text-zinc-100" },
-            { label: "Year", value: "1858", color: "text-zinc-100" },
+            { label: "Result", value: summary.result, color: "text-emerald-400" },
+            { label: "Moves", value: summary.moveCount, color: "text-zinc-100" },
+            { label: "Opening", value: summary.opening ?? "—", color: "text-zinc-100" },
           ].map((s) => (
             <div key={s.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-              <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
+              <div className={`text-lg font-bold truncate ${s.color}`}>{s.value}</div>
               <div className="text-[9px] text-zinc-500 uppercase tracking-widest mt-0.5">{s.label}</div>
             </div>
           ))}
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-          <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Game narrative</div>
-          <p className="text-sm text-zinc-300 leading-[1.75]">{SUMMARY.narrative}</p>
-        </div>
-        <div className="bg-indigo-950/50 border border-indigo-500/20 rounded-2xl p-4">
-          <div className="text-[9px] text-indigo-400 uppercase tracking-widest mb-2.5">Pattern observed</div>
-          <p className="text-sm text-zinc-300 leading-[1.75]">{SUMMARY.pattern}</p>
-        </div>
+        {(summary.whiteElo || summary.blackElo || summary.whiteAcpl != null || summary.blackAcpl != null) && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left px-4 py-2.5 text-[9px] text-zinc-500 uppercase tracking-widest font-medium w-1/3">Player</th>
+                  <th className="text-center px-3 py-2.5 text-[9px] text-zinc-500 uppercase tracking-widest font-medium">Rating</th>
+                  <th className="text-center px-3 py-2.5 text-[9px] text-zinc-500 uppercase tracking-widest font-medium">Avg loss</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {[
+                  { name: summary.white, elo: summary.whiteElo, acpl: summary.whiteAcpl },
+                  { name: summary.black, elo: summary.blackElo, acpl: summary.blackAcpl },
+                ].map((p) => (
+                  <tr key={p.name}>
+                    <td className="px-4 py-2.5 text-zinc-300 truncate max-w-0 w-1/3">{p.name}</td>
+                    <td className="px-3 py-2.5 text-center font-mono text-zinc-400">{p.elo ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-center font-mono">
+                      {p.acpl != null ? (
+                        <span className={p.acpl <= 20 ? "text-emerald-400" : p.acpl <= 40 ? "text-yellow-400" : "text-red-400"}>
+                          {p.acpl}
+                        </span>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {summary.narrative && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+            <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Game narrative</div>
+            <p className="text-sm text-zinc-300 leading-[1.75]">{summary.narrative}</p>
+          </div>
+        )}
+        {summary.pattern && (
+          <div className="bg-indigo-950/50 border border-indigo-500/20 rounded-2xl p-4">
+            <div className="text-[9px] text-indigo-400 uppercase tracking-widest mb-2.5">Pattern observed</div>
+            <p className="text-sm text-zinc-300 leading-[1.75]">{summary.pattern}</p>
+          </div>
+        )}
         <div>
           <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Key moments</div>
           <div className="space-y-1.5">
-            {MOMENTS.map((m) => (
+            {moments.map((m) => (
               <button
                 key={m.id}
                 className="w-full text-left flex items-start gap-3 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 active:bg-zinc-800 transition-colors"
@@ -569,7 +603,9 @@ function SummaryContent({ onClose, onJump }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <Chip classification={m.classification} small />
-                  <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 line-clamp-2">{m.explanation}</p>
+                  {m.explanation && (
+                    <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 line-clamp-2">{m.explanation}</p>
+                  )}
                 </div>
                 <span className="text-zinc-600 text-xs mt-0.5 shrink-0">→</span>
               </button>
@@ -589,21 +625,96 @@ function SummaryScreen({ onClose, onJump }) {
   );
 }
 
-// ─── Main app ─────────────────────────────────────────────────────────────────
+// ─── Import screen ────────────────────────────────────────────────────────────
 
-const GAME_ID = "opera-1858";
+function ImportScreen({ onImport, onDemo, error, setError }) {
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
 
-function initialIdxFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const moveParam = parseInt(params.get("move"), 10);
-  if (!isNaN(moveParam) && moveParam >= 0 && moveParam < POSITIONS.length) {
-    return moveParam;
-  }
-  return 0;
+  const handleImport = async () => {
+    const gameId = parseLichessUrl(url);
+    if (!gameId) {
+      setError({ message: "Paste a Lichess game URL (e.g. lichess.org/abc12345)" });
+      return;
+    }
+    setLoading(true);
+    await onImport(gameId);
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-md space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Chess Reviewer</h1>
+          <p className="text-zinc-500 text-sm mt-1">Paste a Lichess game URL to get started</p>
+        </div>
+        <div className="space-y-3">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => { setUrl(e.target.value); setError(null); }}
+            onKeyDown={(e) => e.key === "Enter" && handleImport()}
+            placeholder="https://lichess.org/abc12345"
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+            autoFocus
+          />
+          {error && (
+            <p className="text-sm text-red-400">
+              {error.message ?? error}
+              {error.gameUrl && (
+                <> — <a href={error.gameUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-red-300">open on Lichess</a></>
+              )}
+            </p>
+          )}
+          <button
+            onClick={handleImport}
+            disabled={loading || !url.trim()}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 rounded-xl text-sm font-semibold transition-colors"
+          >
+            {loading ? "Loading…" : "Import game"}
+          </button>
+        </div>
+        <div className="text-center">
+          <button
+            onClick={onDemo}
+            className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2"
+          >
+            Or try the Opera Game (demo)
+          </button>
+        </div>
+        <p className="text-xs text-zinc-600 text-center leading-relaxed">
+          Only games with computer analysis are supported. To add analysis, open the game on Lichess and click
+          "Request a computer analysis".
+        </p>
+      </div>
+    </div>
+  );
 }
 
-export default function App() {
-  const [moveIdx, setMoveIdx] = useState(initialIdxFromUrl);
+// ─── Loading screen ───────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <p className="text-zinc-500 text-sm">Loading game…</p>
+    </div>
+  );
+}
+
+// ─── Game review (inner) ──────────────────────────────────────────────────────
+
+function GameReviewContent({ gameId, onReset }) {
+  const { positions, evals, moments, momentByMoveIdx, keyMoveIdxs, summary } = useContext(GameContext);
+
+  const [moveIdx, setMoveIdx] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const moveParam = parseInt(params.get("move"), 10);
+    if (!isNaN(moveParam) && moveParam >= 0 && moveParam < positions.length) {
+      return moveParam;
+    }
+    return 0;
+  });
   const [showSummary, setShowSummary] = useState(false);
   const [chatHistory, setChatHistory] = useState({});
   const [analysisCache, setAnalysisCache] = useState({});
@@ -613,19 +724,19 @@ export default function App() {
   const leftPanelRef = useRef(null);
   const rightPanelRef = useRef(null);
 
-  const currentMoment = MOMENT_BY_MOVE_IDX[moveIdx] ?? null;
-  const currentPos = POSITIONS[moveIdx];
+  const currentMoment = momentByMoveIdx[moveIdx] ?? null;
+  const currentPos = positions[moveIdx];
 
   useEffect(() => {
     const params = new URLSearchParams();
-    params.set("game", GAME_ID);
+    params.set("game", gameId);
     params.set("move", moveIdx);
     history.replaceState(null, "", "?" + params.toString());
-  }, [moveIdx]);
+  }, [moveIdx, gameId]);
 
-  const prevKeyMoment = [...KEY_MOVE_IDXS].reverse().find((i) => i < moveIdx);
-  const nextKeyMoment = KEY_MOVE_IDXS.find((i) => i > moveIdx);
-  const currentMomentRank = currentMoment ? MOMENTS.indexOf(currentMoment) + 1 : null;
+  const prevKeyMoment = [...keyMoveIdxs].reverse().find((i) => i < moveIdx);
+  const nextKeyMoment = keyMoveIdxs.find((i) => i > moveIdx);
+  const currentMomentRank = currentMoment ? moments.indexOf(currentMoment) + 1 : null;
 
   const jumpTo = (idx) => {
     setMoveIdx(idx);
@@ -642,7 +753,7 @@ export default function App() {
 
   const stepMove = (dir) => {
     const next = moveIdx + dir;
-    if (next >= 0 && next < POSITIONS.length) jumpTo(next);
+    if (next >= 0 && next < positions.length) jumpTo(next);
   };
 
   useEffect(() => {
@@ -664,10 +775,10 @@ export default function App() {
   };
 
   const counterLabel = currentMoment
-    ? `${currentMomentRank} / ${MOMENTS.length}`
+    ? `${currentMomentRank} / ${moments.length}`
     : moveIdx === 0
     ? "Start"
-    : `${moveIdx} / ${POSITIONS.length - 1}`;
+    : `${moveIdx} / ${positions.length - 1}`;
   const counterSub = currentMoment ? "key moments" : "all moves";
 
   const commentarySection = currentMoment ? (
@@ -679,12 +790,14 @@ export default function App() {
           </span>
           <Chip classification={currentMoment.classification} />
         </div>
-        <EvalBar before={EVALS[currentMoment.moveIdx - 1] ?? 0} after={EVALS[currentMoment.moveIdx]} />
+        <EvalBar before={evals[currentMoment.moveIdx - 1] ?? 0} after={evals[currentMoment.moveIdx]} />
       </div>
-      <div className="px-4 py-4">
-        <p className="text-sm text-zinc-300 leading-[1.75]">{currentMoment.explanation}</p>
-      </div>
-      {currentMoment.betterMoves.length > 0 && (
+      {currentMoment.explanation && (
+        <div className="px-4 py-4">
+          <p className="text-sm text-zinc-300 leading-[1.75]">{currentMoment.explanation}</p>
+        </div>
+      )}
+      {currentMoment.betterMoves && currentMoment.betterMoves.length > 0 && (
         <div className="px-4 pb-4 border-t border-zinc-800/60 pt-3.5">
           <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Better alternatives</div>
           <div className="flex flex-wrap gap-2">
@@ -720,7 +833,7 @@ export default function App() {
               {Math.ceil(moveIdx / 2)}{moveIdx % 2 === 1 ? "." : "..."} {currentPos.san}
             </span>
           </div>
-          <EvalBar before={EVALS[moveIdx - 1] ?? 0} after={EVALS[moveIdx]} />
+          <EvalBar before={evals[moveIdx - 1] ?? 0} after={evals[moveIdx]} />
         </div>
         <div className="px-4 py-4">
           {analysisCache[moveIdx] ? (
@@ -749,7 +862,6 @@ export default function App() {
 
   const controls = (
     <>
-      {/* Primary navigation: key moment jumps */}
       <div className="flex items-center justify-between px-4 pt-2 pb-1 gap-2">
         <button
           onClick={() => goKeyMoment(-1)}
@@ -776,8 +888,6 @@ export default function App() {
           →
         </button>
       </div>
-
-      {/* Secondary navigation: single-move steps */}
       <div className="flex items-center justify-center gap-6 pb-3">
         <button
           onClick={() => stepMove(-1)}
@@ -789,7 +899,7 @@ export default function App() {
         </button>
         <button
           onClick={() => stepMove(1)}
-          disabled={moveIdx === POSITIONS.length - 1}
+          disabled={moveIdx === positions.length - 1}
           className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
           aria-label="Next move"
         >
@@ -802,33 +912,42 @@ export default function App() {
   return (
     <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
       {/* Header */}
-      <button
-        className="flex items-center justify-between px-4 py-3.5 bg-zinc-900/90 backdrop-blur border-b border-zinc-800 text-left shrink-0 hover:bg-zinc-900 active:bg-zinc-800 transition-colors"
-        onClick={() => setShowSummary(true)}
-      >
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-zinc-100 leading-tight">
-            {SUMMARY.white} <span className="text-zinc-500 font-normal">vs</span>{" "}
-            <span className="text-zinc-300">{SUMMARY.black}</span>
+      <div className="flex items-center bg-zinc-900/90 backdrop-blur border-b border-zinc-800 shrink-0">
+        <button
+          onClick={onReset}
+          className="px-3 py-3.5 text-zinc-600 hover:text-zinc-300 transition-colors text-sm shrink-0"
+          aria-label="Back to import"
+        >
+          ←
+        </button>
+        <button
+          className="flex-1 flex items-center justify-between px-2 py-3.5 text-left hover:bg-zinc-900 active:bg-zinc-800 transition-colors min-w-0"
+          onClick={() => setShowSummary(true)}
+        >
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-zinc-100 leading-tight truncate">
+              {summary.white} <span className="text-zinc-500 font-normal">vs</span>{" "}
+              <span className="text-zinc-300">{summary.black}</span>
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">{summary.event}</div>
           </div>
-          <div className="text-xs text-zinc-500 mt-0.5">{SUMMARY.event}</div>
-        </div>
-        <div className="flex items-center gap-2 ml-3 shrink-0">
-          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
-            {SUMMARY.result}
-          </span>
-          <span className="text-zinc-600 text-xs font-light">↑</span>
-        </div>
-      </button>
+          <div className="flex items-center gap-2 ml-3 shrink-0">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+              {summary.result}
+            </span>
+            <span className="text-zinc-600 text-xs font-light">↑</span>
+          </div>
+        </button>
+      </div>
 
-      {/* Body — single scroll on mobile, two columns on desktop */}
+      {/* Body */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto md:overflow-hidden md:flex"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        {/* Left panel: board + timeline + controls (+ commentary on mobile) */}
+        {/* Left panel */}
         <div
           ref={leftPanelRef}
           className="shrink-0 md:w-[420px] md:overflow-y-auto md:border-r md:border-zinc-800"
@@ -838,14 +957,13 @@ export default function App() {
           </div>
           <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
           {controls}
-          {/* Commentary + chat inline on mobile only */}
           <div className="md:hidden">
             {commentarySection}
             {chatSection}
           </div>
         </div>
 
-        {/* Right panel: commentary + chat on desktop only */}
+        {/* Right panel (desktop) */}
         <div
           ref={rightPanelRef}
           className="hidden md:flex md:flex-col md:flex-1 md:overflow-y-auto"
@@ -864,7 +982,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Summary overlay */}
+      {/* Summary overlay (mobile) */}
       {showSummary && (
         <SummaryScreen
           onClose={() => setShowSummary(false)}
@@ -875,5 +993,82 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+function GameReview({ game, gameId, onReset }) {
+  return (
+    <GameContext.Provider value={game}>
+      <GameReviewContent gameId={gameId} onReset={onReset} />
+    </GameContext.Provider>
+  );
+}
+
+// ─── App router ───────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [screen, setScreen] = useState("import");
+  const [gameData, setGameData] = useState(null);
+  const [gameId, setGameId] = useState(null);
+  const [importError, setImportError] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gid = params.get("game");
+    if (!gid) return;
+    if (gid === "opera-1858") {
+      setGameData(DEMO_GAME);
+      setGameId("opera-1858");
+      setScreen("review");
+    } else {
+      doImport(gid);
+    }
+  }, []);
+
+  const doImport = async (id) => {
+    setScreen("loading");
+    setImportError(null);
+    try {
+      const pgn = await fetchLichessGame(id);
+      const parsed = parseGame(pgn);
+      if (!parsed.hasEvals) {
+        setImportError({
+          message: 'This game has no computer analysis. Request it on Lichess first.',
+          gameUrl: `https://lichess.org/${id}`,
+        });
+        setScreen("import");
+        return;
+      }
+      setGameData(parsed);
+      setGameId(id);
+      setScreen("review");
+    } catch (e) {
+      setImportError(e.message);
+      setScreen("import");
+    }
+  };
+
+  const handleReset = () => {
+    setScreen("import");
+    setGameData(null);
+    setGameId(null);
+    history.replaceState(null, "", window.location.pathname);
+  };
+
+  if (screen === "loading") return <LoadingScreen />;
+  if (screen === "review" && gameData) {
+    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} />;
+  }
+  return (
+    <ImportScreen
+      onImport={doImport}
+      onDemo={() => {
+        setGameData(DEMO_GAME);
+        setGameId("opera-1858");
+        setScreen("review");
+      }}
+      error={importError}
+      setError={setImportError}
+    />
   );
 }
