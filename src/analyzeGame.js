@@ -46,10 +46,11 @@ const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation an
 - Use lowercase algebraic squares (a1–h8)
 - Include 2–3 annotations per explanation; annotate every key square and move`;
 
-const MAX_MOMENTS = 12;
+const MAX_MOMENTS = 25;
 
 function selectMoments(moments, evals) {
   if (moments.length <= MAX_MOMENTS) return [...moments].sort((a, b) => a.moveIdx - b.moveIdx);
+  // Fallback for extreme outliers: proportional sampling across game thirds
   const totalMoves = evals.length - 1;
   const swing = (m) => Math.abs((evals[m.moveIdx] ?? 0) - (evals[m.moveIdx - 1] ?? 0));
   const bySwing = (arr) => [...arr].sort((a, b) => swing(b) - swing(a));
@@ -102,9 +103,9 @@ Return ONLY valid JSON, no markdown:
   "moments": [
     {
       "moveIdx": <number>,
-      "explanation": "2-3 sentences with [[square/piece/move]] annotations: what happened and why it matters",
+      "explanation": "1-2 sentences with [[square/piece/move]] annotations: what happened and why it matters",
       "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
-      "suggestedQuestion": "A specific follow-up question"
+      "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up question>"
     }
   ]
 }
