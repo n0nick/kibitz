@@ -46,21 +46,34 @@ const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation an
 - Use lowercase algebraic squares (a1–h8)
 - Include 2–3 annotations per explanation; annotate every key square and move`;
 
-const MAX_MOMENTS = 10;
+const MAX_MOMENTS = 12;
+
+function selectMoments(moments, evals) {
+  if (moments.length <= MAX_MOMENTS) return [...moments].sort((a, b) => a.moveIdx - b.moveIdx);
+  const totalMoves = evals.length - 1;
+  const swing = (m) => Math.abs((evals[m.moveIdx] ?? 0) - (evals[m.moveIdx - 1] ?? 0));
+  const bySwing = (arr) => [...arr].sort((a, b) => swing(b) - swing(a));
+  const third = totalMoves / 3;
+  const sections = [
+    bySwing(moments.filter((m) => m.moveIdx <= third)),
+    bySwing(moments.filter((m) => m.moveIdx > third && m.moveIdx <= 2 * third)),
+    bySwing(moments.filter((m) => m.moveIdx > 2 * third)),
+  ];
+  const perSection = Math.ceil(MAX_MOMENTS / 3);
+  const selected = new Set(sections.flatMap((s) => s.slice(0, perSection)));
+  if (selected.size < MAX_MOMENTS) {
+    bySwing(moments.filter((m) => !selected.has(m)))
+      .slice(0, MAX_MOMENTS - selected.size)
+      .forEach((m) => selected.add(m));
+  }
+  return [...selected].sort((a, b) => a.moveIdx - b.moveIdx);
+}
 
 function buildPrompt(pgn, moments, summary, evals, tone) {
   const cleanPgn = pgn.replace(/\{[^}]*\}/g, "").replace(/\s+/g, " ").trim();
   const fmt = (v) => (v >= 99 ? "M" : v <= -99 ? "-M" : v.toFixed(1));
 
-  // Cap to most significant moments to stay within token limits
-  const topMoments = [...moments]
-    .sort((a, b) => {
-      const swingA = Math.abs((evals[a.moveIdx] ?? 0) - (evals[a.moveIdx - 1] ?? 0));
-      const swingB = Math.abs((evals[b.moveIdx] ?? 0) - (evals[b.moveIdx - 1] ?? 0));
-      return swingB - swingA;
-    })
-    .slice(0, MAX_MOMENTS)
-    .sort((a, b) => a.moveIdx - b.moveIdx);
+  const topMoments = selectMoments(moments, evals);
 
   const momentsList = topMoments
     .map((m) => {
