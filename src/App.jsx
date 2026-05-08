@@ -775,12 +775,8 @@ function GameReviewContent({ gameId, onReset }) {
     touchStartX.current = null;
   };
 
-  const counterLabel = currentMoment
-    ? `${currentMomentRank} / ${moments.length}`
-    : moveIdx === 0
-    ? "Start"
-    : `${moveIdx} / ${positions.length - 1}`;
-  const counterSub = currentMoment ? "key moments" : "all moves";
+  const counterLabel = moveIdx === 0 ? "Start" : `${moveIdx} / ${positions.length - 1}`;
+  const counterSub = currentMoment ? "key moment" : "move";
 
   const commentarySection = currentMoment ? (
     <div className="mx-4 mb-4 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
@@ -885,7 +881,9 @@ function GameReviewContent({ gameId, onReset }) {
             {counterLabel}
           </span>
         </div>
-        <div className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5">{counterSub}</div>
+        <div className={`text-[9px] uppercase tracking-widest mt-0.5 ${currentMoment ? "text-zinc-400" : "text-zinc-600"}`}>
+          {counterSub}
+        </div>
       </div>
       <button
         onClick={() => stepMove(1)}
