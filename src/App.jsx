@@ -506,10 +506,57 @@ function MoveTimeline({ moveIdx, onJump }) {
   );
 }
 
+// ─── Rich text (markdown + annotations) ──────────────────────────────────────
+
+function RichText({ text, onHover, fenBefore, fenAfter }) {
+  if (!text) return null;
+
+  function renderInline(str) {
+    const tokens = str.split(/(\[\[[^\]]*\]\]|\*\*[^*]+\*\*|\*[^*]+\*)/);
+    return tokens.map((token, i) => {
+      if (token.startsWith("[[") && token.endsWith("]]")) {
+        const { display, from, to } = parseAnnotation(token.slice(2, -2), fenBefore, fenAfter);
+        return (
+          <span
+            key={i}
+            className="underline decoration-dotted underline-offset-2 cursor-pointer text-zinc-200 hover:text-white transition-colors"
+            onMouseEnter={() => onHover?.({ from, to })}
+            onMouseLeave={() => onHover?.(null)}
+          >
+            {display}
+          </span>
+        );
+      }
+      if (token.startsWith("**") && token.endsWith("**")) {
+        return <strong key={i} className="font-semibold text-zinc-200">{token.slice(2, -2)}</strong>;
+      }
+      if (token.startsWith("*") && token.endsWith("*") && token.length > 2) {
+        return <em key={i} className="italic">{token.slice(1, -1)}</em>;
+      }
+      return <span key={i}>{token}</span>;
+    });
+  }
+
+  const elements = [];
+  for (const [i, line] of text.split("\n").entries()) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const heading = trimmed.match(/^#{1,3}\s+(.+)/);
+    if (heading) {
+      elements.push(<p key={i} className="font-semibold text-zinc-200">{renderInline(heading[1])}</p>);
+    } else {
+      elements.push(<p key={i} className="leading-relaxed">{renderInline(trimmed)}</p>);
+    }
+  }
+  return <div className="space-y-1.5">{elements}</div>;
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
-function Chat({ moment, history, setHistory, apiKey, tone }) {
-  const { summary } = useContext(GameContext);
+function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
+  const { summary, positions } = useContext(GameContext);
+  const fenBefore = positions[moment.moveIdx - 1]?.fen;
+  const fenAfter = positions[moment.moveIdx]?.fen;
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const endRef = useRef(null);
@@ -572,7 +619,11 @@ function Chat({ moment, history, setHistory, apiKey, tone }) {
               >
                 {msg.role === "user" ? "You" : "Coach"}
               </div>
-              <p>{msg.text}</p>
+              {msg.role === "assistant" ? (
+                <RichText text={msg.text} onHover={onHover} fenBefore={fenBefore} fenAfter={fenAfter} />
+              ) : (
+                <p>{msg.text}</p>
+              )}
             </div>
           ))}
           {sending && (
@@ -1087,7 +1138,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
   );
 
   const chatSection = currentMoment && (
-    <Chat moment={currentMoment} history={chatHistory} setHistory={setChatHistory} apiKey={apiKey} tone={tone} />
+    <Chat moment={currentMoment} history={chatHistory} setHistory={setChatHistory} apiKey={apiKey} tone={tone} onHover={setHoverHighlight} />
   );
 
   const controls = (

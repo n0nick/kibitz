@@ -122,7 +122,7 @@ export async function chatAboutPosition({ summary, moment, messages, question, t
   const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown"}, ${summary.result}).
 Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification})${moment.explanation ? `\nContext: ${moment.explanation}` : ""}
 Tone: ${toneDesc(tone)}
-Be concise. Use board annotations when referencing specific squares or moves: [[e6]], [[Ng5|g5]], [[Nxe6|g5-e6]].`;
+Be concise. Use markdown: **bold** for key points, *italic* for concepts. ${ANNOTATION_RULES}`;
 
   const apiMessages = [
     ...messages.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text })),
