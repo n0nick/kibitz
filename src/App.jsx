@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame, sanToSquares } from "./parseGame";
 import { analyzeGame, analyzeSinglePosition, chatAboutPosition, TONES } from "./analyzeGame";
-import { fetchLichessAccount, fetchLichessRecentGames, requestLichessAnalysis } from "./lichess";
+import { fetchLichessAccount, fetchLichessRecentGames } from "./lichess";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
 
@@ -1156,8 +1156,16 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
 
   const commentarySection = analysisStatus === "awaiting-evals" ? (
     <div className="mx-4 mb-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/40 px-4 py-5">
-      <p className="text-sm text-zinc-400 animate-pulse">Waiting for Lichess computer analysis…</p>
-      <p className="text-xs text-zinc-600 mt-1.5">Usually takes 30–60 seconds. Board will update automatically.</p>
+      <p className="text-sm text-zinc-300 font-medium mb-1.5">Computer analysis needed</p>
+      <p className="text-xs text-zinc-400 mb-3">
+        Open this game on Lichess and click <span className="text-zinc-200 font-medium">Request a computer analysis</span>. This page will update automatically when it's ready.
+      </p>
+      {gameId && (
+        <a href={`https://lichess.org/${gameId}`} target="_blank" rel="noopener noreferrer"
+          className="inline-block text-xs font-medium text-blue-400 hover:text-blue-300 underline">
+          Open on Lichess →
+        </a>
+      )}
     </div>
   ) : currentMoment ? (
     <div className="mx-4 mb-4 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
@@ -1497,19 +1505,10 @@ export default function App() {
       const pgn = await fetchLichessGame(id);
       const parsed = parseGame(pgn);
       if (!parsed.hasEvals) {
-        if (lichessToken) {
-          try { await requestLichessAnalysis(id, lichessToken); } catch { /* rate-limited or already queued — poll anyway */ }
-          setGameData(parsed);
-          setGameId(id);
-          setScreen("review");
-          setAnalysisStatus("awaiting-evals");
-        } else {
-          setImportError({
-            message: 'This game has no computer analysis. Request it on Lichess first.',
-            gameUrl: `https://lichess.org/${id}`,
-          });
-          setScreen("import");
-        }
+        setGameData(parsed);
+        setGameId(id);
+        setScreen("review");
+        setAnalysisStatus("awaiting-evals");
         return;
       }
       setGameData(parsed);

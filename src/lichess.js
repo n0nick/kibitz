@@ -8,8 +8,9 @@ export async function fetchLichessAccount(token) {
   return res.json();
 }
 
+
 export async function fetchLichessRecentGames(username, token) {
-  const params = new URLSearchParams({ max: 30, opening: true, moves: true, clocks: false, evals: false });
+  const params = new URLSearchParams({ max: 30, opening: true, moves: true, clocks: false, evals: true, pgnInJson: true });
   const headers = { Accept: "application/x-ndjson" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}/api/games/user/${encodeURIComponent(username)}?${params}`, { headers });
@@ -27,17 +28,7 @@ export async function fetchLichessRecentGames(username, token) {
       opening: g.opening?.name ?? null,
       speed: g.speed,
       playedAt: g.lastMoveAt,
-      hasEvals: Array.isArray(g.analysis) && g.analysis.length > 0,
+      hasEvals: typeof g.pgn === "string" ? g.pgn.includes("[%eval") : (Array.isArray(g.analysis) && g.analysis.length > 0),
     };
   });
-}
-
-export async function requestLichessAnalysis(gameId, token) {
-  const res = await fetch(`${BASE}/api/analyse/${gameId}/computer`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (res.status === 304 || res.ok) return;
-  const body = await res.json().catch(() => ({}));
-  throw new Error(body.error ?? `Analysis request failed (${res.status})`);
 }
