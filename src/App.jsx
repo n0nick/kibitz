@@ -820,6 +820,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
   const [lichessDraft, setLichessDraft] = useState(lichessToken);
   const [lichessVisible, setLichessVisible] = useState(false);
   const [lichessError, setLichessError] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(!(apiKey && lichessUser));
   const [games, setGames] = useState(null);
   const [gamesError, setGamesError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -991,50 +992,70 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
         </div>
 
         {/* Settings */}
-        <div className="border-t border-zinc-800 pt-5 space-y-4">
-          <div className="text-xs text-zinc-500 uppercase tracking-widest">Settings</div>
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-zinc-600">Anthropic API key</label>
-              {apiKey && <span className="text-[10px] text-emerald-500">saved</span>}
+        <div className="border-t border-zinc-800 pt-4">
+          <button
+            onClick={() => setSettingsOpen((v) => !v)}
+            className="flex items-center justify-between w-full group"
+          >
+            <span className="text-xs text-zinc-500 uppercase tracking-widest">Settings</span>
+            <span className="flex items-center gap-3">
+              {!settingsOpen && (
+                <span className="flex items-center gap-2 text-[10px]">
+                  {apiKey && <span className="text-emerald-500">Anthropic ✓</span>}
+                  {lichessUser && <span className="text-emerald-500">{lichessUser} ✓</span>}
+                </span>
+              )}
+              <span className="text-zinc-600 group-hover:text-zinc-400 transition-colors text-xs">
+                {settingsOpen ? "▲" : "▼"}
+              </span>
+            </span>
+          </button>
+          {settingsOpen && (
+            <div className="mt-4 space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-zinc-600">Anthropic API key</label>
+                  {apiKey && <span className="text-[10px] text-emerald-500">saved</span>}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type={keyVisible ? "text" : "password"}
+                    value={keyDraft}
+                    onChange={(e) => setKeyDraft(e.target.value)}
+                    onBlur={saveApiKey}
+                    onKeyDown={(e) => e.key === "Enter" && saveApiKey()}
+                    placeholder="sk-ant-…"
+                    className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
+                  />
+                  <button onClick={() => setKeyVisible((v) => !v)} className="px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs">
+                    {keyVisible ? "hide" : "show"}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-zinc-600">Lichess personal token</label>
+                  {lichessUser && <span className="text-[10px] text-emerald-500">{lichessUser}</span>}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type={lichessVisible ? "text" : "password"}
+                    value={lichessDraft}
+                    onChange={(e) => setLichessDraft(e.target.value)}
+                    onBlur={saveLichessToken}
+                    onKeyDown={(e) => e.key === "Enter" && saveLichessToken()}
+                    placeholder="lip_…"
+                    className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
+                  />
+                  <button onClick={() => setLichessVisible((v) => !v)} className="px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs">
+                    {lichessVisible ? "hide" : "show"}
+                  </button>
+                </div>
+                {lichessError && <p className="text-xs text-red-400">{lichessError}</p>}
+                <p className="text-xs text-zinc-600">Create at lichess.org/account/oauth/token — no scopes needed.</p>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <input
-                type={keyVisible ? "text" : "password"}
-                value={keyDraft}
-                onChange={(e) => setKeyDraft(e.target.value)}
-                onBlur={saveApiKey}
-                onKeyDown={(e) => e.key === "Enter" && saveApiKey()}
-                placeholder="sk-ant-…"
-                className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
-              />
-              <button onClick={() => setKeyVisible((v) => !v)} className="px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs">
-                {keyVisible ? "hide" : "show"}
-              </button>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-zinc-600">Lichess personal token</label>
-              {lichessUser && <span className="text-[10px] text-emerald-500">{lichessUser}</span>}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type={lichessVisible ? "text" : "password"}
-                value={lichessDraft}
-                onChange={(e) => setLichessDraft(e.target.value)}
-                onBlur={saveLichessToken}
-                onKeyDown={(e) => e.key === "Enter" && saveLichessToken()}
-                placeholder="lip_…"
-                className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
-              />
-              <button onClick={() => setLichessVisible((v) => !v)} className="px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs">
-                {lichessVisible ? "hide" : "show"}
-              </button>
-            </div>
-            {lichessError && <p className="text-xs text-red-400">{lichessError}</p>}
-            <p className="text-xs text-zinc-600">Create at lichess.org/account/oauth/token — no scopes needed.</p>
-          </div>
+          )}
         </div>
       </div>
     </div>
