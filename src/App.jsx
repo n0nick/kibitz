@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
-import { parseLichessUrl, fetchLichessGame, parseGame } from "./parseGame";
+import { parseLichessUrl, fetchLichessGame, parseGame, sanToSquares } from "./parseGame";
 import { analyzeGame } from "./analyzeGame";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
@@ -265,7 +265,7 @@ function parseFen(fen) {
 
 // ─── Chess board ──────────────────────────────────────────────────────────────
 
-function Board({ fen, fromSq, toSq }) {
+function Board({ fen, fromSq, toSq, altFromSq, altToSq }) {
   const board = parseFen(fen);
   const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
   const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"];
@@ -289,8 +289,11 @@ function Board({ fen, fromSq, toSq }) {
               rank.map((piece, fi) => {
                 const light = (ri + fi) % 2 === 0;
                 const sq = `${"abcdefgh"[fi]}${8 - ri}`;
-                const highlighted = sq === fromSq || sq === toSq;
-                const bg = highlighted
+                const isAlt = sq === altFromSq || sq === altToSq;
+                const isMove = sq === fromSq || sq === toSq;
+                const bg = isAlt
+                  ? light ? "#b4d0e7" : "#6699cc"
+                  : isMove
                   ? light ? "#f6f669" : "#baca44"
                   : light ? "#f0d9b5" : "#b58863";
                 return (
@@ -852,6 +855,11 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [moveIdx]);
 
+  const altMove = currentMoment?.betterMoves?.[expandedAlt];
+  const altHighlight = altMove
+    ? sanToSquares(positions[currentMoment.moveIdx - 1].fen, altMove.move)
+    : null;
+
   const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchEnd = (e) => {
     if (touchStartX.current === null) return;
@@ -1039,7 +1047,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
           className="shrink-0 md:w-[420px] md:overflow-y-auto md:border-r md:border-zinc-800"
         >
           <div className="px-4 pt-5 pb-3">
-            <Board fen={currentPos.fen} fromSq={currentPos.from} toSq={currentPos.to} />
+            <Board fen={currentPos.fen} fromSq={currentPos.from} toSq={currentPos.to} altFromSq={altHighlight?.from} altToSq={altHighlight?.to} />
           </div>
           <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
           {controls}
