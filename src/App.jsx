@@ -1286,7 +1286,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
                 </button>
               );
             })()}
-            {gameId && (
+            {gameId?.match(/^[a-zA-Z0-9]{8}$/) && (
               <a
                 href={`https://lichess.org/${gameId}`}
                 target="_blank"
@@ -1298,7 +1298,9 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
             )}
           </div>
           <p className="text-[10px] text-zinc-600 mt-2">
-            Local analysis takes ~1 min. If you request it on Lichess, this page updates automatically.
+            {gameId?.match(/^[a-zA-Z0-9]{8}$/)
+              ? "Local analysis takes ~1 min. If you request it on Lichess, this page updates automatically."
+              : "Local analysis takes ~1 min."}
           </p>
         </>
       )}
@@ -1613,6 +1615,9 @@ export default function App() {
       setGameData(DEMO_GAME);
       setGameId("opera-1858");
       setScreen("review");
+    } else if (gid.startsWith("pgn-")) {
+      const pgn = getCachedPgn(gid);
+      if (pgn) doImportPgn(pgn);
     } else {
       doImport(gid);
     }
@@ -1620,6 +1625,7 @@ export default function App() {
 
   useEffect(() => {
     if (analysisStatus !== "awaiting-evals" || !gameId) return;
+    if (!gameId.match(/^[a-zA-Z0-9]{8}$/)) return; // skip polling for non-Lichess IDs
     pollingRef.current = setInterval(async () => {
       try {
         const pgn = await fetchLichessGame(gameId);
