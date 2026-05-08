@@ -555,7 +555,7 @@ function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
     }));
     try {
       const answer = apiKey
-        ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone }, apiKey)
+        ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone, fen: fenAfter ?? fenBefore }, apiKey)
         : "Add an Anthropic API key on the import screen to enable AI chat.";
       setHistory((prev) => ({
         ...prev,
