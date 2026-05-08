@@ -265,7 +265,7 @@ function parseFen(fen) {
 
 // ─── Chess board ──────────────────────────────────────────────────────────────
 
-function Board({ fen, fromSq, toSq, altFromSq, altToSq }) {
+function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq }) {
   const board = parseFen(fen);
   const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
   const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"];
@@ -290,9 +290,12 @@ function Board({ fen, fromSq, toSq, altFromSq, altToSq }) {
                 const light = (ri + fi) % 2 === 0;
                 const sq = `${"abcdefgh"[fi]}${8 - ri}`;
                 const isAlt = sq === altFromSq || sq === altToSq;
+                const isHover = sq === hoverFromSq || (hoverToSq ? sq === hoverToSq : false);
                 const isMove = sq === fromSq || sq === toSq;
                 const bg = isAlt
                   ? light ? "#b4d0e7" : "#6699cc"
+                  : isHover
+                  ? light ? "#d4b8e8" : "#9b72cf"
                   : isMove
                   ? light ? "#f6f669" : "#baca44"
                   : light ? "#f0d9b5" : "#b58863";
@@ -370,6 +373,44 @@ function EvalBar({ before, after }) {
         )}
       </span>
     </div>
+  );
+}
+
+// ─── Annotated text ───────────────────────────────────────────────────────────
+
+function parseAnnotation(raw) {
+  const pipeIdx = raw.indexOf("|");
+  if (pipeIdx === -1) {
+    const isSquare = /^[a-h][1-8]$/.test(raw);
+    return { display: raw, from: isSquare ? raw : null, to: null };
+  }
+  const display = raw.slice(0, pipeIdx);
+  const parts = raw.slice(pipeIdx + 1).split("-");
+  const sq = (s) => (/^[a-h][1-8]$/.test(s) ? s : null);
+  return { display, from: sq(parts[0]), to: sq(parts[1]) ?? null };
+}
+
+function AnnotatedText({ text, onHover }) {
+  if (!text) return null;
+  const parts = text.split(/(\[\[[^\]]*\]\])/);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const match = part.match(/^\[\[([^\]]*)\]\]$/);
+        if (!match) return <span key={i}>{part}</span>;
+        const { display, from, to } = parseAnnotation(match[1]);
+        return (
+          <span
+            key={i}
+            className="underline decoration-dotted underline-offset-2 cursor-pointer text-zinc-200 hover:text-white transition-colors"
+            onMouseEnter={() => onHover({ from, to })}
+            onMouseLeave={() => onHover(null)}
+          >
+            {display}
+          </span>
+        );
+      })}
+    </>
   );
 }
 
@@ -808,6 +849,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
   const [chatHistory, setChatHistory] = useState({});
   const [analysisCache, setAnalysisCache] = useState({});
   const [expandedAlt, setExpandedAlt] = useState(null);
+  const [hoverHighlight, setHoverHighlight] = useState(null);
   const touchStartX = useRef(null);
   const scrollRef = useRef(null);
   const leftPanelRef = useRef(null);
@@ -884,7 +926,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
       </div>
       <div className="px-4 py-4">
         {currentMoment.explanation ? (
-          <p className="text-sm text-zinc-300 leading-[1.75]">{currentMoment.explanation}</p>
+          <p className="text-sm text-zinc-300 leading-[1.75]"><AnnotatedText text={currentMoment.explanation} onHover={setHoverHighlight} /></p>
         ) : analysisStatus === "loading" ? (
           <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
         ) : analysisStatus === "error" ? (
@@ -911,7 +953,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
                 </button>
                 {expandedAlt === i && (
                   <p className="mt-2 text-xs text-zinc-400 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 leading-relaxed">
-                    {alt.reason}
+                    <AnnotatedText text={alt.reason} onHover={setHoverHighlight} />
                   </p>
                 )}
               </div>
@@ -1047,7 +1089,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
           className="shrink-0 md:w-[420px] md:overflow-y-auto md:border-r md:border-zinc-800"
         >
           <div className="px-4 pt-5 pb-3">
-            <Board fen={currentPos.fen} fromSq={currentPos.from} toSq={currentPos.to} altFromSq={altHighlight?.from} altToSq={altHighlight?.to} />
+            <Board fen={currentPos.fen} fromSq={currentPos.from} toSq={currentPos.to} altFromSq={altHighlight?.from} altToSq={altHighlight?.to} hoverFromSq={hoverHighlight?.from} hoverToSq={hoverHighlight?.to} />
           </div>
           <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
           {controls}

@@ -44,7 +44,12 @@ Return ONLY valid JSON with no markdown fences and no text outside the JSON:
 Rules:
 - betterMoves: only for inaccuracy/mistake/blunder — empty array [] for great/brilliant
 - betterMoves: max 2 entries
-- moveIdx values must match the input exactly`;
+- moveIdx values must match the input exactly
+- Board annotations in explanation and betterMoves reasons only (not suggestedQuestion):
+  - Single square: [[d7]] — underlines "d7", highlights that square on the board
+  - Move with display text: [[Rxd7|d1-d7]] — underlines "Rxd7", highlights d1→d7
+  - Use lowercase algebraic squares (a1–h8)
+  - Annotate the 2–3 most important references per explanation, not every mention`;
 }
 
 export async function analyzeGame(pgn, moments, summary, evals, apiKey) {
