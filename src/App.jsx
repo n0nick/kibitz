@@ -517,9 +517,9 @@ function Chat({ moment, history, setHistory }) {
 
 // ─── Summary screen ───────────────────────────────────────────────────────────
 
-function SummaryScreen({ onClose, onJump }) {
+function SummaryContent({ onClose, onJump }) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950 max-w-md mx-auto">
+    <>
       <div className="flex items-center justify-between px-4 py-4 bg-zinc-900 border-b border-zinc-800 shrink-0">
         <div>
           <div className="text-sm font-semibold text-zinc-100">{SUMMARY.white}</div>
@@ -532,53 +532,59 @@ function SummaryScreen({ onClose, onJump }) {
           ×
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-4 space-y-4">
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: "Result", value: SUMMARY.result, color: "text-emerald-400" },
-              { label: "Moves", value: SUMMARY.moveCount, color: "text-zinc-100" },
-              { label: "Year", value: "1858", color: "text-zinc-100" },
-            ].map((s) => (
-              <div key={s.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-                <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mt-0.5">{s.label}</div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Game narrative</div>
-            <p className="text-sm text-zinc-300 leading-[1.75]">{SUMMARY.narrative}</p>
-          </div>
-          <div className="bg-indigo-950/50 border border-indigo-500/20 rounded-2xl p-4">
-            <div className="text-[9px] text-indigo-400 uppercase tracking-widest mb-2.5">Pattern observed</div>
-            <p className="text-sm text-zinc-300 leading-[1.75]">{SUMMARY.pattern}</p>
-          </div>
-          <div>
-            <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Key moments</div>
-            <div className="space-y-1.5">
-              {MOMENTS.map((m) => (
-                <button
-                  key={m.id}
-                  className="w-full text-left flex items-start gap-3 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 active:bg-zinc-800 transition-colors"
-                  onClick={() => onJump(m.moveIdx)}
-                >
-                  <div className="shrink-0 pt-0.5">
-                    <span className={`text-xs font-mono font-semibold ${CLS[m.classification]?.text ?? "text-zinc-300"}`}>
-                      {m.moveNumber} {m.notation}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <Chip classification={m.classification} small />
-                    <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 line-clamp-2">{m.explanation}</p>
-                  </div>
-                  <span className="text-zinc-600 text-xs mt-0.5 shrink-0">→</span>
-                </button>
-              ))}
+      <div className="p-4 space-y-4">
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: "Result", value: SUMMARY.result, color: "text-emerald-400" },
+            { label: "Moves", value: SUMMARY.moveCount, color: "text-zinc-100" },
+            { label: "Year", value: "1858", color: "text-zinc-100" },
+          ].map((s) => (
+            <div key={s.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+              <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
+              <div className="text-[9px] text-zinc-500 uppercase tracking-widest mt-0.5">{s.label}</div>
             </div>
+          ))}
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+          <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Game narrative</div>
+          <p className="text-sm text-zinc-300 leading-[1.75]">{SUMMARY.narrative}</p>
+        </div>
+        <div className="bg-indigo-950/50 border border-indigo-500/20 rounded-2xl p-4">
+          <div className="text-[9px] text-indigo-400 uppercase tracking-widest mb-2.5">Pattern observed</div>
+          <p className="text-sm text-zinc-300 leading-[1.75]">{SUMMARY.pattern}</p>
+        </div>
+        <div>
+          <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Key moments</div>
+          <div className="space-y-1.5">
+            {MOMENTS.map((m) => (
+              <button
+                key={m.id}
+                className="w-full text-left flex items-start gap-3 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 active:bg-zinc-800 transition-colors"
+                onClick={() => onJump(m.moveIdx)}
+              >
+                <div className="shrink-0 pt-0.5">
+                  <span className={`text-xs font-mono font-semibold ${CLS[m.classification]?.text ?? "text-zinc-300"}`}>
+                    {m.moveNumber} {m.notation}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Chip classification={m.classification} small />
+                  <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 line-clamp-2">{m.explanation}</p>
+                </div>
+                <span className="text-zinc-600 text-xs mt-0.5 shrink-0">→</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
+    </>
+  );
+}
+
+function SummaryScreen({ onClose, onJump }) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950 overflow-y-auto max-w-md mx-auto md:hidden">
+      <SummaryContent onClose={onClose} onJump={onJump} />
     </div>
   );
 }
@@ -844,10 +850,17 @@ export default function App() {
           ref={rightPanelRef}
           className="hidden md:flex md:flex-col md:flex-1 md:overflow-y-auto"
         >
-          <div className="flex-1 py-6 max-w-2xl w-full mx-auto">
-            {commentarySection}
-            {chatSection}
-          </div>
+          {showSummary ? (
+            <SummaryContent
+              onClose={() => setShowSummary(false)}
+              onJump={(targetMoveIdx) => { jumpTo(targetMoveIdx); setShowSummary(false); }}
+            />
+          ) : (
+            <div className="flex-1 py-6 max-w-2xl w-full mx-auto">
+              {commentarySection}
+              {chatSection}
+            </div>
+          )}
         </div>
       </div>
 
