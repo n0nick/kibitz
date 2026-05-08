@@ -46,11 +46,23 @@ const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation an
 - Use lowercase algebraic squares (a1–h8)
 - Include 2–3 annotations per explanation; annotate every key square and move`;
 
+const MAX_MOMENTS = 10;
+
 function buildPrompt(pgn, moments, summary, evals, tone) {
   const cleanPgn = pgn.replace(/\{[^}]*\}/g, "").replace(/\s+/g, " ").trim();
   const fmt = (v) => (v >= 99 ? "M" : v <= -99 ? "-M" : v.toFixed(1));
 
-  const momentsList = moments
+  // Cap to most significant moments to stay within token limits
+  const topMoments = [...moments]
+    .sort((a, b) => {
+      const swingA = Math.abs((evals[a.moveIdx] ?? 0) - (evals[a.moveIdx - 1] ?? 0));
+      const swingB = Math.abs((evals[b.moveIdx] ?? 0) - (evals[b.moveIdx - 1] ?? 0));
+      return swingB - swingA;
+    })
+    .slice(0, MAX_MOMENTS)
+    .sort((a, b) => a.moveIdx - b.moveIdx);
+
+  const momentsList = topMoments
     .map((m) => {
       const before = evals[m.moveIdx - 1] ?? 0;
       const after = evals[m.moveIdx];
@@ -86,7 +98,7 @@ Return ONLY valid JSON, no markdown:
 
 Rules:
 - betterMoves only for inaccuracy/mistake/blunder ([] for great/brilliant), max 2
-- Every moveIdx in input must appear in output
+- Output exactly the moveIdx values listed above, no more, no less
 - ${ANNOTATION_RULES}`;
 }
 
