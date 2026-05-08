@@ -46,8 +46,10 @@ Rules:
 - betterMoves: max 2 entries
 - moveIdx values must match the input exactly
 - Board annotations in explanation and betterMoves reasons only (not suggestedQuestion):
-  - Single square: [[d7]] — underlines "d7", highlights that square on the board
-  - Move with display text: [[Rxd7|d1-d7]] — underlines "Rxd7", highlights d1→d7
+  - Square reference: [[e6]] — underlines "e6", highlights that square
+  - Piece on a square: [[Ng5|g5]] — underlines "Ng5", highlights square g5
+  - Move (MUST include explicit from–to): [[Nxe6|g5-e6]] — underlines "Nxe6", highlights g5→e6
+  - NEVER use [[SAN]] without a pipe for moves — always provide |from-to
   - Use lowercase algebraic squares (a1–h8)
   - Annotate the 2–3 most important references per explanation, not every mention`;
 }

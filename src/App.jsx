@@ -378,19 +378,25 @@ function EvalBar({ before, after }) {
 
 // ─── Annotated text ───────────────────────────────────────────────────────────
 
-function parseAnnotation(raw) {
-  const pipeIdx = raw.indexOf("|");
-  if (pipeIdx === -1) {
-    const isSquare = /^[a-h][1-8]$/.test(raw);
-    return { display: raw, from: isSquare ? raw : null, to: null };
-  }
-  const display = raw.slice(0, pipeIdx);
-  const parts = raw.slice(pipeIdx + 1).split("-");
+function parseAnnotation(raw, fenBefore, fenAfter) {
   const sq = (s) => (/^[a-h][1-8]$/.test(s) ? s : null);
-  return { display, from: sq(parts[0]), to: sq(parts[1]) ?? null };
+  const pipeIdx = raw.indexOf("|");
+  if (pipeIdx !== -1) {
+    const display = raw.slice(0, pipeIdx);
+    const parts = raw.slice(pipeIdx + 1).split("-");
+    return { display, from: sq(parts[0]), to: sq(parts[1]) ?? null };
+  }
+  const display = raw;
+  if (sq(raw)) return { display, from: raw, to: null };
+  // Fallback: try resolving as SAN against the surrounding positions
+  for (const fen of [fenBefore, fenAfter].filter(Boolean)) {
+    const result = sanToSquares(fen, raw);
+    if (result) return { display, ...result };
+  }
+  return { display, from: null, to: null };
 }
 
-function AnnotatedText({ text, onHover }) {
+function AnnotatedText({ text, onHover, fenBefore, fenAfter }) {
   if (!text) return null;
   const parts = text.split(/(\[\[[^\]]*\]\])/);
   return (
@@ -398,7 +404,7 @@ function AnnotatedText({ text, onHover }) {
       {parts.map((part, i) => {
         const match = part.match(/^\[\[([^\]]*)\]\]$/);
         if (!match) return <span key={i}>{part}</span>;
-        const { display, from, to } = parseAnnotation(match[1]);
+        const { display, from, to } = parseAnnotation(match[1], fenBefore, fenAfter);
         return (
           <span
             key={i}
@@ -926,7 +932,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
       </div>
       <div className="px-4 py-4">
         {currentMoment.explanation ? (
-          <p className="text-sm text-zinc-300 leading-[1.75]"><AnnotatedText text={currentMoment.explanation} onHover={setHoverHighlight} /></p>
+          <p className="text-sm text-zinc-300 leading-[1.75]"><AnnotatedText text={currentMoment.explanation} onHover={setHoverHighlight} fenBefore={positions[currentMoment.moveIdx - 1]?.fen} fenAfter={positions[currentMoment.moveIdx]?.fen} /></p>
         ) : analysisStatus === "loading" ? (
           <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
         ) : analysisStatus === "error" ? (
@@ -953,7 +959,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
                 </button>
                 {expandedAlt === i && (
                   <p className="mt-2 text-xs text-zinc-400 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 leading-relaxed">
-                    <AnnotatedText text={alt.reason} onHover={setHoverHighlight} />
+                    <AnnotatedText text={alt.reason} onHover={setHoverHighlight} fenBefore={positions[currentMoment.moveIdx - 1]?.fen} fenAfter={positions[currentMoment.moveIdx]?.fen} />
                   </p>
                 )}
               </div>
