@@ -265,7 +265,7 @@ function parseFen(fen) {
 
 // ─── Chess board ──────────────────────────────────────────────────────────────
 
-function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq }) {
+function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq, analysisHref }) {
   const board = parseFen(fen);
   return (
     <div className="w-full mx-auto select-none"
@@ -312,6 +312,20 @@ function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq }
             );
           })
         )}
+      </div>
+      <div className="flex justify-end pt-1 pr-0.5">
+        <a
+          href={analysisHref ?? `https://lichess.org/analysis/${fen.replace(/ /g, "_")}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[9px] leading-none font-medium transition-colors"
+          style={{ color: "#6b4e2a" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#a0784a"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "#6b4e2a"; }}
+          title="Open position in Lichess Analysis Board"
+        >
+          lichess ↗
+        </a>
       </div>
     </div>
   );
@@ -1392,7 +1406,9 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
           className="shrink-0 md:w-[420px] md:overflow-y-auto md:border-r md:border-zinc-800"
         >
           <div className="px-4 pt-5 pb-3">
-            <Board fen={currentPos.fen} fromSq={currentPos.from} toSq={currentPos.to} altFromSq={altHighlight?.from} altToSq={altHighlight?.to} hoverFromSq={hoverHighlight?.from} hoverToSq={hoverHighlight?.to} />
+            <Board fen={currentPos.fen} fromSq={currentPos.from} toSq={currentPos.to} altFromSq={altHighlight?.from} altToSq={altHighlight?.to} hoverFromSq={hoverHighlight?.from} hoverToSq={hoverHighlight?.to}
+              analysisHref={gameId && gameId !== "opera-1858" ? `https://lichess.org/${gameId}#${moveIdx}` : undefined}
+            />
           </div>
           <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
           {controls}
