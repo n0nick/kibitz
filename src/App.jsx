@@ -807,6 +807,12 @@ function setCachedPgn(id, pgn) {
   try { localStorage.setItem(`kibitz-pgn-${id}`, JSON.stringify({ data: pgn, ts: Date.now() })); } catch {}
 }
 
+function gameSource(id) {
+  if (!id || id === "opera-1858") return "demo";
+  if (id.startsWith("pgn-")) return "pgn";
+  return "lichess";
+}
+
 function pgnGameId(pgn) {
   const m = pgn.match(/\[Site\s+"https?:\/\/(?:www\.)?lichess\.org\/([a-zA-Z0-9]{8})(?:[/?#][^"]*)?"]/);
   if (m) return m[1];
@@ -1286,7 +1292,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
                 </button>
               );
             })()}
-            {gameId?.match(/^[a-zA-Z0-9]{8}$/) && (
+            {gameSource(gameId) === "lichess" && (
               <a
                 href={`https://lichess.org/${gameId}`}
                 target="_blank"
@@ -1298,7 +1304,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
             )}
           </div>
           <p className="text-[10px] text-zinc-600 mt-2">
-            {gameId?.match(/^[a-zA-Z0-9]{8}$/)
+            {gameSource(gameId) === "lichess"
               ? "Local analysis takes ~1 min. If you request it on Lichess, this page updates automatically."
               : "Local analysis takes ~1 min."}
           </p>
@@ -1540,7 +1546,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
         >
           <div className="px-4 pt-5 pb-3">
             <Board fen={currentPos.fen} fromSq={currentPos.from} toSq={currentPos.to} altFromSq={altHighlight?.from} altToSq={altHighlight?.to} hoverFromSq={hoverHighlight?.from} hoverToSq={hoverHighlight?.to}
-              analysisHref={gameId && gameId !== "opera-1858" ? `https://lichess.org/${gameId}#${moveIdx}` : undefined}
+              analysisHref={gameSource(gameId) === "lichess" ? `https://lichess.org/${gameId}#${moveIdx}` : undefined}
             />
           </div>
           <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} gameId={gameId} />
@@ -1615,7 +1621,7 @@ export default function App() {
       setGameData(DEMO_GAME);
       setGameId("opera-1858");
       setScreen("review");
-    } else if (gid.startsWith("pgn-")) {
+    } else if (gameSource(gid) === "pgn") {
       const pgn = getCachedPgn(gid);
       if (pgn) doImportPgn(pgn);
     } else {
@@ -1625,7 +1631,7 @@ export default function App() {
 
   useEffect(() => {
     if (analysisStatus !== "awaiting-evals" || !gameId) return;
-    if (!gameId.match(/^[a-zA-Z0-9]{8}$/)) return; // skip polling for non-Lichess IDs
+    if (gameSource(gameId) !== "lichess") return;
     pollingRef.current = setInterval(async () => {
       try {
         const pgn = await fetchLichessGame(gameId);
