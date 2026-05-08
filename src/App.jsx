@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame, sanToSquares } from "./parseGame";
 import { analyzeGame, analyzeSinglePosition, chatAboutPosition, TONES } from "./analyzeGame";
 import { fetchLichessAccount, fetchLichessRecentGames } from "./lichess";
+import { analyzePosition, engineLineText } from "./stockfish";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
 
@@ -554,8 +555,10 @@ function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
       [moment.id]: [...(prev[moment.id] || []), { role: "user", text: q }],
     }));
     try {
+      const fen = fenAfter ?? fenBefore;
+      const engineLine = fen ? engineLineText(await analyzePosition(fen).catch(() => null)) : null;
       const answer = apiKey
-        ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone, fen: fenAfter ?? fenBefore }, apiKey)
+        ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone, fen, engineLine }, apiKey)
         : "Add an Anthropic API key on the import screen to enable AI chat.";
       setHistory((prev) => ({
         ...prev,

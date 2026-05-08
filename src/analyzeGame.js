@@ -135,12 +135,12 @@ Reply with plain text only (no JSON).`;
   return callApi([{ role: "user", content: prompt }], apiKey);
 }
 
-export async function chatAboutPosition({ summary, moment, messages, question, tone, fen }, apiKey) {
+export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine }, apiKey) {
   const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown"}, ${summary.result}).
-Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification})${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fen ? `\nPosition (FEN): ${fen}` : ""}
+Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification})${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fen ? `\nPosition (FEN): ${fen}` : ""}${engineLine ? `\n${engineLine}` : ""}
 Tone: ${toneDesc(tone)}
 Be concise. Use markdown: **bold** for key points, *italic* for concepts. ${ANNOTATION_RULES}
-IMPORTANT: Only claim a move gives check or captures a piece if it genuinely does so in the given position.`;
+IMPORTANT: Only claim a move gives check or captures a piece if it genuinely does so in the given FEN. When an engine line is provided, use it as ground truth for tactical calculation.`;
 
   const apiMessages = [
     ...messages.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text })),
