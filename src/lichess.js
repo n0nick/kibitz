@@ -9,7 +9,7 @@ export async function fetchLichessAccount(token) {
 }
 
 export async function fetchLichessRecentGames(username, token) {
-  const params = new URLSearchParams({ max: 30, opening: true, moves: false, clocks: false });
+  const params = new URLSearchParams({ max: 30, opening: true, moves: true, clocks: false, evals: false });
   const headers = { Accept: "application/x-ndjson" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}/api/games/user/${encodeURIComponent(username)}?${params}`, { headers });
