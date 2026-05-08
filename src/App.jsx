@@ -267,8 +267,9 @@ function parseFen(fen) {
 function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq }) {
   const board = parseFen(fen);
   return (
-    <div className="w-full mx-auto select-none rounded-sm overflow-hidden" style={{ boxShadow: "0 6px 32px rgba(0,0,0,0.6)" }}>
-      <div className="grid" style={{ gridTemplateColumns: "repeat(8, 1fr)" }}>
+    <div className="w-full mx-auto select-none"
+      style={{ padding: 8, background: "#1e1008", borderRadius: 6, boxShadow: "0 8px 40px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
+      <div className="grid rounded-sm overflow-hidden" style={{ gridTemplateColumns: "repeat(8, 1fr)" }}>
         {board.map((rank, ri) =>
           rank.map((piece, fi) => {
             const light = (ri + fi) % 2 === 0;
@@ -280,20 +281,20 @@ function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq }
               <div
                 key={`${ri}-${fi}`}
                 className="aspect-square relative"
-                style={{ background: light ? "#f0d9b5" : "#b58863" }}
+                style={{ background: light ? "#f0d9b5" : "#a07040" }}
               >
-                {isMove  && <div className="absolute inset-0" style={{ background: "rgba(205,170,0,0.5)" }} />}
-                {isAlt   && <div className="absolute inset-0" style={{ background: "rgba(20,140,200,0.45)" }} />}
-                {isHover && <div className="absolute inset-0" style={{ background: "rgba(140,80,220,0.42)" }} />}
+                {isMove  && <div className="absolute inset-0" style={{ background: "rgba(210,175,0,0.48)" }} />}
+                {isAlt   && <div className="absolute inset-0" style={{ background: "rgba(20,140,200,0.42)" }} />}
+                {isHover && <div className="absolute inset-0" style={{ background: "rgba(140,80,220,0.40)" }} />}
                 {fi === 0 && (
                   <span className="absolute top-[2px] left-[3px] text-[9px] font-bold leading-none pointer-events-none z-10"
-                    style={{ color: light ? "#9a7045" : "#e8c99a" }}>
+                    style={{ color: light ? "#8a6030" : "#d4a870" }}>
                     {8 - ri}
                   </span>
                 )}
                 {ri === 7 && (
                   <span className="absolute bottom-[2px] right-[3px] text-[9px] font-bold leading-none pointer-events-none z-10"
-                    style={{ color: light ? "#9a7045" : "#e8c99a" }}>
+                    style={{ color: light ? "#8a6030" : "#d4a870" }}>
                     {"abcdefgh"[fi]}
                   </span>
                 )}
@@ -301,8 +302,9 @@ function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq }
                   <img
                     src={pieceImg(piece)}
                     alt={piece}
-                    className="absolute inset-0 w-full h-full p-[6%] z-10"
+                    className="absolute inset-0 w-full h-full p-[5%] z-10"
                     draggable={false}
+                    style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.55))" }}
                   />
                 )}
               </div>
