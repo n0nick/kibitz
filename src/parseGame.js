@@ -1,10 +1,14 @@
 import { Chess } from "chess.js";
 
 export function sanToSquares(fen, san) {
-  const chess = new Chess(fen);
-  const move = chess.move(san);
-  if (!move) return null;
-  return { from: move.from, to: move.to };
+  try {
+    const chess = new Chess(fen);
+    const move = chess.move(san);
+    if (!move) return null;
+    return { from: move.from, to: move.to };
+  } catch {
+    return null;
+  }
 }
 
 export function parseLichessUrl(input) {
