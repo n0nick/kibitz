@@ -16,6 +16,7 @@ const PIECE = {
 
 const CLS = {
   brilliant:  { label: "Brilliant!!", icon: "✦", bg: "bg-indigo-500/20",  text: "text-indigo-400",  border: "border-indigo-500/40",  dot: "bg-indigo-400"  },
+  great:      { label: "Great move",  icon: "!",  bg: "bg-sky-500/20",    text: "text-sky-400",     border: "border-sky-500/40",     dot: "bg-sky-400"     },
   good:       { label: "Good",        icon: "✓", bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/40", dot: "bg-emerald-400" },
   inaccuracy: { label: "Inaccuracy",  icon: "?!", bg: "bg-yellow-500/20", text: "text-yellow-400",  border: "border-yellow-500/40",  dot: "bg-yellow-400"  },
   mistake:    { label: "Mistake",     icon: "?",  bg: "bg-orange-500/20", text: "text-orange-400",  border: "border-orange-500/40",  dot: "bg-orange-400"  },

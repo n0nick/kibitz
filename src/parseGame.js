@@ -57,6 +57,8 @@ function classify(loss) {
   if (loss >= 2.0) return "blunder";
   if (loss >= 0.5) return "mistake";
   if (loss >= 0.2) return "inaccuracy";
+  if (loss <= -2.0) return "brilliant";
+  if (loss <= -0.5) return "great";
   return "good";
 }
 
