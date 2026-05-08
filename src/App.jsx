@@ -599,13 +599,14 @@ function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
         beforeLines ? `Before this move (best alternatives):\n${engineLineText(beforeLines)}` : null,
       ].filter(Boolean).join("\n\n") || null;
       const answer = apiKey
-        ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone, fen, engineLine }, apiKey)
+        ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone, fen: fenCurrent, engineLine }, apiKey)
         : "Add an Anthropic API key on the import screen to enable AI chat.";
       setHistory((prev) => ({
         ...prev,
         [moment.id]: [...(prev[moment.id] || []), { role: "assistant", text: answer }],
       }));
-    } catch {
+    } catch (e) {
+      console.error("Chat failed:", e);
       setHistory((prev) => ({
         ...prev,
         [moment.id]: [...(prev[moment.id] || []), { role: "assistant", text: "Analysis failed. Check your API key." }],
