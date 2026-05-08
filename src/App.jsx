@@ -1819,7 +1819,7 @@ export default function App() {
       }).join(" ");
       const result = await analyzeGame(effectivePgn, game.moments, game.summary, game.evals, key, t);
       localStorage.setItem(cacheKey, JSON.stringify({ data: result, ts: Date.now() }));
-      setGameData((prev) => mergeAnalysis(prev, result));
+      setGameData((prev) => prev ? mergeAnalysis(prev, result) : prev);
       setAnalysisStatus("done");
     } catch (e) {
       console.error("Analysis failed:", e);
