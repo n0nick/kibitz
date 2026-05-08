@@ -814,6 +814,7 @@ function useLichess() {
 function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, tone, setTone, lichessToken, lichessUser, setLichess }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingId, setLoadingId] = useState(null);
   const [forceReanalyze, setForceReanalyze] = useState(false);
   const [keyDraft, setKeyDraft] = useState(apiKey);
   const [keyVisible, setKeyVisible] = useState(false);
@@ -823,7 +824,6 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
   const [settingsOpen, setSettingsOpen] = useState(!(apiKey && lichessUser));
   const [games, setGames] = useState(null);
   const [gamesError, setGamesError] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
 
   useEffect(() => {
     if (!lichessUser) { setGames(null); return; }
@@ -848,15 +848,23 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
   };
 
   const urlGameId = parseLichessUrl(url);
-  const selectedListGame = Array.isArray(games) ? games.find((g) => g.id === selectedId) : null;
-  const gameIdToLoad = selectedId ?? urlGameId;
-  const needsEvals = selectedListGame && !selectedListGame.hasEvals;
 
-  const handleLoad = async () => {
-    if (!gameIdToLoad) { setError({ message: "Select a game or paste a Lichess URL." }); return; }
+  const handleListLoad = async (id) => {
     setLoading(true);
-    await onImport(gameIdToLoad, forceReanalyze);
+    setLoadingId(id);
+    await onImport(id, forceReanalyze);
     setLoading(false);
+    setLoadingId(null);
+    setForceReanalyze(false);
+  };
+
+  const handleUrlLoad = async () => {
+    if (!urlGameId) return;
+    setLoading(true);
+    setLoadingId(urlGameId);
+    await onImport(urlGameId, forceReanalyze);
+    setLoading(false);
+    setLoadingId(null);
     setForceReanalyze(false);
   };
 
@@ -877,7 +885,25 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
           </p>
         </div>
 
-        {/* My games */}
+        {/* Tone */}
+        <div className="space-y-2">
+          <label className="text-xs text-zinc-500 uppercase tracking-widest">Analysis level</label>
+          <div className="flex gap-2">
+            {TONES.map((t) => (
+              <button
+                key={t.value}
+                onClick={() => setTone(t.value)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                  tone === t.value ? "bg-zinc-700 border-zinc-500 text-zinc-100" : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* My games — click to load */}
         {lichessUser && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -902,13 +928,15 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
               <div className="rounded-xl border border-zinc-800 overflow-hidden divide-y divide-zinc-800/60 max-h-56 overflow-y-auto">
                 {games.map((g) => {
                   const opp = g.white.toLowerCase() === lichessUser.toLowerCase() ? g.black : g.white;
+                  const isLoading = loadingId === g.id;
                   return (
                     <button
                       key={g.id}
-                      onClick={() => { setSelectedId(g.id === selectedId ? null : g.id); setUrl(""); setError(null); }}
+                      onClick={() => { setError(null); handleListLoad(g.id); }}
+                      disabled={loading}
                       className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors ${
-                        selectedId === g.id ? "bg-indigo-600/20 border-l-2 border-l-indigo-500" : "hover:bg-zinc-800/60"
-                      }`}
+                        isLoading ? "bg-indigo-600/10" : "hover:bg-zinc-800/60"
+                      } disabled:opacity-60`}
                     >
                       <span className={`shrink-0 text-[8px] ${g.hasEvals ? "text-emerald-400" : "text-amber-400"}`}>●</span>
                       <span className="flex-1 min-w-0 truncate">
@@ -916,7 +944,10 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
                         {g.opening && <span className="text-zinc-500 text-xs ml-2">{g.opening.split(":")[0]}</span>}
                       </span>
                       <span className="text-zinc-500 text-xs shrink-0">{g.result}</span>
-                      <span className="text-zinc-700 text-[10px] shrink-0">{timeAgo(g.playedAt)}</span>
+                      {isLoading
+                        ? <span className="text-zinc-500 text-[10px] shrink-0 animate-pulse">loading…</span>
+                        : <span className="text-zinc-700 text-[10px] shrink-0">{timeAgo(g.playedAt)}</span>
+                      }
                     </button>
                   );
                 })}
@@ -927,18 +958,27 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
           </div>
         )}
 
-        {/* URL */}
+        {/* URL — compact, secondary */}
         <div className="space-y-2">
           {lichessUser && <p className="text-xs text-zinc-600 text-center">— or paste a URL —</p>}
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => { setUrl(e.target.value); setSelectedId(null); setError(null); }}
-            onKeyDown={(e) => e.key === "Enter" && handleLoad()}
-            placeholder="https://lichess.org/abc12345"
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
-            autoFocus={!lichessUser}
-          />
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => { setUrl(e.target.value); setError(null); }}
+              onKeyDown={(e) => e.key === "Enter" && handleUrlLoad()}
+              placeholder="https://lichess.org/abc12345"
+              className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+              autoFocus={!lichessUser}
+            />
+            <button
+              onClick={handleUrlLoad}
+              disabled={loading || !urlGameId}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-30 rounded-xl text-sm font-semibold transition-colors shrink-0"
+            >
+              {loadingId === urlGameId && loading ? "…" : "Load →"}
+            </button>
+          </div>
           {error && (
             <p className="text-sm text-red-400">
               {error.message ?? error}
@@ -949,45 +989,14 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
           )}
         </div>
 
-        {/* Tone */}
-        <div className="space-y-2">
-          <label className="text-xs text-zinc-500 uppercase tracking-widest">Analysis level</label>
-          <div className="flex gap-2">
-            {TONES.map((t) => (
-              <button
-                key={t.value}
-                onClick={() => setTone(t.value)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-                  tone === t.value ? "bg-zinc-700 border-zinc-500 text-zinc-100" : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Load */}
-        <div className="space-y-2">
-          <button
-            onClick={handleLoad}
-            disabled={loading || !gameIdToLoad}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 rounded-xl text-sm font-semibold transition-colors"
-          >
-            {loading ? "Loading…" : needsEvals ? "Load & request analysis" : "Load game"}
-          </button>
-          {needsEvals && !loading && (
-            <p className="text-xs text-zinc-600 text-center">No Lichess analysis yet — will be requested automatically.</p>
-          )}
+        {/* Re-analyze + Opera Game */}
+        <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={forceReanalyze} onChange={(e) => setForceReanalyze(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-500" />
-            <span className="text-xs text-zinc-500">Re-analyze (overwrite saved analysis)</span>
+            <span className="text-xs text-zinc-500">Re-analyze (overwrite saved)</span>
           </label>
-        </div>
-
-        <div className="text-center">
-          <button onClick={onDemo} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2">
-            Or try the Opera Game (demo)
+          <button onClick={onDemo} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline underline-offset-2">
+            try the Opera Game
           </button>
         </div>
 
