@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame } from "./parseGame";
+import { analyzeGame } from "./analyzeGame";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
 
@@ -218,6 +219,31 @@ const DEMO_GAME = {
   keyMoveIdxs: DEMO_MOMENTS.map((m) => m.moveIdx),
   hasEvals: true,
 };
+
+// ─── Analysis merge ───────────────────────────────────────────────────────────
+
+function mergeAnalysis(game, result) {
+  const updatedMoments = game.moments.map((m) => {
+    const a = result.moments?.find((r) => r.moveIdx === m.moveIdx);
+    if (!a) return m;
+    return {
+      ...m,
+      explanation: a.explanation ?? m.explanation,
+      betterMoves: a.betterMoves ?? m.betterMoves,
+      qa: a.suggestedQuestion ? { question: a.suggestedQuestion, answer: null } : m.qa,
+    };
+  });
+  return {
+    ...game,
+    summary: {
+      ...game.summary,
+      narrative: result.narrative ?? game.summary.narrative,
+      pattern: result.pattern ?? game.summary.pattern,
+    },
+    moments: updatedMoments,
+    momentByMoveIdx: Object.fromEntries(updatedMoments.map((m) => [m.moveIdx, m])),
+  };
+}
 
 // ─── FEN parser ───────────────────────────────────────────────────────────────
 
@@ -759,7 +785,7 @@ function LoadingScreen() {
 
 // ─── Game review (inner) ──────────────────────────────────────────────────────
 
-function GameReviewContent({ gameId, onReset, apiKey }) {
+function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
   const { positions, evals, moments, momentByMoveIdx, keyMoveIdxs, summary } = useContext(GameContext);
 
   const [moveIdx, setMoveIdx] = useState(() => {
@@ -843,11 +869,17 @@ function GameReviewContent({ gameId, onReset, apiKey }) {
         </div>
         <EvalBar before={evals[currentMoment.moveIdx - 1] ?? 0} after={evals[currentMoment.moveIdx]} />
       </div>
-      {currentMoment.explanation && (
-        <div className="px-4 py-4">
+      <div className="px-4 py-4">
+        {currentMoment.explanation ? (
           <p className="text-sm text-zinc-300 leading-[1.75]">{currentMoment.explanation}</p>
-        </div>
-      )}
+        ) : analysisStatus === "loading" ? (
+          <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
+        ) : analysisStatus === "error" ? (
+          <p className="text-sm text-red-500/70">Analysis failed. Check your API key.</p>
+        ) : !apiKey ? (
+          <p className="text-sm text-zinc-600">Add an Anthropic API key on the import screen to enable AI analysis.</p>
+        ) : null}
+      </div>
       {currentMoment.betterMoves && currentMoment.betterMoves.length > 0 && (
         <div className="px-4 pb-4 border-t border-zinc-800/60 pt-3.5">
           <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Better alternatives</div>
@@ -1045,10 +1077,10 @@ function GameReviewContent({ gameId, onReset, apiKey }) {
   );
 }
 
-function GameReview({ game, gameId, onReset, apiKey }) {
+function GameReview({ game, gameId, onReset, apiKey, analysisStatus }) {
   return (
     <GameContext.Provider value={game}>
-      <GameReviewContent gameId={gameId} onReset={onReset} apiKey={apiKey} />
+      <GameReviewContent gameId={gameId} onReset={onReset} apiKey={apiKey} analysisStatus={analysisStatus} />
     </GameContext.Provider>
   );
 }
@@ -1061,6 +1093,7 @@ export default function App() {
   const [gameData, setGameData] = useState(null);
   const [gameId, setGameId] = useState(null);
   const [importError, setImportError] = useState(null);
+  const [analysisStatus, setAnalysisStatus] = useState(null); // null | 'loading' | 'done' | 'error'
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1092,9 +1125,22 @@ export default function App() {
       setGameData(parsed);
       setGameId(id);
       setScreen("review");
+      if (apiKey) runAnalysis(parsed, pgn, apiKey);
     } catch (e) {
       setImportError(e.message);
       setScreen("import");
+    }
+  };
+
+  const runAnalysis = async (game, pgn, key) => {
+    setAnalysisStatus("loading");
+    try {
+      const result = await analyzeGame(pgn, game.moments, game.summary, game.evals, key);
+      setGameData((prev) => mergeAnalysis(prev, result));
+      setAnalysisStatus("done");
+    } catch (e) {
+      console.error("Analysis failed:", e);
+      setAnalysisStatus("error");
     }
   };
 
@@ -1102,12 +1148,13 @@ export default function App() {
     setScreen("import");
     setGameData(null);
     setGameId(null);
+    setAnalysisStatus(null);
     history.replaceState(null, "", window.location.pathname);
   };
 
   if (screen === "loading") return <LoadingScreen />;
   if (screen === "review" && gameData) {
-    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} />;
+    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} analysisStatus={analysisStatus} />;
   }
   return (
     <ImportScreen
