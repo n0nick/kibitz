@@ -792,6 +792,21 @@ function SummaryScreen({ onClose, onJump }) {
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+function getCachedPgn(id) {
+  try {
+    const raw = localStorage.getItem(`kibitz-pgn-${id}`);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts < CACHE_TTL) return data;
+    localStorage.removeItem(`kibitz-pgn-${id}`);
+  } catch {}
+  return null;
+}
+
+function setCachedPgn(id, pgn) {
+  try { localStorage.setItem(`kibitz-pgn-${id}`, JSON.stringify({ data: pgn, ts: Date.now() })); } catch {}
+}
+
 // ─── API key hook ─────────────────────────────────────────────────────────────
 
 const API_KEY_STORAGE = "kibitz-anthropic-key";
@@ -845,15 +860,30 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
   const [lichessError, setLichessError] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(!(apiKey && lichessUser));
   const [games, setGames] = useState(null);
+  const [gamesStale, setGamesStale] = useState(false);
   const [gamesError, setGamesError] = useState(null);
 
   useEffect(() => {
-    if (!lichessUser) { setGames(null); return; }
-    setGames("loading");
+    if (!lichessUser) { setGames(null); setGamesStale(false); return; }
+    const cacheKey = `kibitz-games-${lichessUser}`;
+    const cached = (() => { try { const r = localStorage.getItem(cacheKey); return r ? JSON.parse(r) : null; } catch { return null; } })();
+    if (cached) {
+      setGames(cached);
+      setGamesStale(true);
+    } else {
+      setGames("loading");
+    }
     setGamesError(null);
     fetchLichessRecentGames(lichessUser, lichessToken)
-      .then(setGames)
-      .catch((e) => { setGamesError(e.message); setGames(null); });
+      .then((fresh) => {
+        setGames(fresh);
+        setGamesStale(false);
+        try { localStorage.setItem(cacheKey, JSON.stringify(fresh)); } catch {}
+      })
+      .catch((e) => {
+        if (!cached) { setGamesError(e.message); setGames(null); }
+        setGamesStale(false);
+      });
   }, [lichessUser]);
 
   const saveApiKey = () => setApiKey(keyDraft);
@@ -929,13 +959,17 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
         {lichessUser && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs text-zinc-500 uppercase tracking-widest">My recent games</label>
+              <label className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+                My recent games
+                {gamesStale && <span className="text-zinc-600 animate-pulse">↻</span>}
+              </label>
               <button
                 onClick={() => {
-                  setGames("loading");
+                  const cacheKey = `kibitz-games-${lichessUser}`;
+                  setGamesStale(true);
                   fetchLichessRecentGames(lichessUser, lichessToken)
-                    .then(setGames)
-                    .catch((e) => { setGamesError(e.message); setGames(null); });
+                    .then((fresh) => { setGames(fresh); setGamesStale(false); try { localStorage.setItem(cacheKey, JSON.stringify(fresh)); } catch {} })
+                    .catch((e) => { setGamesError(e.message); setGamesStale(false); });
                 }}
                 className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
               >
@@ -1621,7 +1655,15 @@ export default function App() {
     setScreen("loading");
     setImportError(null);
     try {
-      const pgn = await fetchLichessGame(id);
+      const cached = !force && getCachedPgn(id);
+      let pgn;
+      if (cached) {
+        pgn = cached;
+        fetchLichessGame(id).then((fresh) => setCachedPgn(id, fresh)).catch(() => {});
+      } else {
+        pgn = await fetchLichessGame(id);
+        setCachedPgn(id, pgn);
+      }
       const parsed = parseGame(pgn);
       if (!parsed.hasEvals) {
         setGameData(parsed);
