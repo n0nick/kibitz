@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
-import { parseLichessUrl, fetchLichessGame, parseGame, sanToSquares } from "./parseGame";
+import { parseLichessUrl, fetchLichessGame, parseGame, reclassifyWithEvals, sanToSquares } from "./parseGame";
 import { analyzeGame, analyzeSinglePosition, chatAboutPosition, TONES } from "./analyzeGame";
 import { fetchLichessAccount, fetchLichessRecentGames } from "./lichess";
-import { analyzePosition, engineLineText } from "./stockfish";
+import { analyzePosition, analyzeFullGame, engineLineText } from "./stockfish";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
 
@@ -1103,7 +1103,7 @@ function LoadingScreen() {
 
 // ─── Game review (inner) ──────────────────────────────────────────────────────
 
-function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analysisStatus }) {
+function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analysisStatus, localProgress, startLocalAnalysis }) {
   const { positions, evals, moments, momentByMoveIdx, keyMoveIdxs, summary } = useContext(GameContext);
 
   const [moveIdx, setMoveIdx] = useState(() => {
@@ -1191,15 +1191,43 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
 
   const commentarySection = analysisStatus === "awaiting-evals" ? (
     <div className="mx-4 mb-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/40 px-4 py-5">
-      <p className="text-sm text-zinc-300 font-medium mb-1.5">Computer analysis needed</p>
-      <p className="text-xs text-zinc-400 mb-3">
-        Open this game on Lichess and click <span className="text-zinc-200 font-medium">Request a computer analysis</span>. This page will update automatically when it's ready.
-      </p>
-      {gameId && (
-        <a href={`https://lichess.org/${gameId}`} target="_blank" rel="noopener noreferrer"
-          className="inline-block text-xs font-medium text-blue-400 hover:text-blue-300 underline">
-          Open on Lichess →
-        </a>
+      <p className="text-sm text-zinc-300 font-medium mb-2">Computer analysis needed</p>
+      {localProgress ? (
+        <>
+          <p className="text-xs text-zinc-400 mb-2">
+            Analyzing locally… {localProgress.current} / {localProgress.total}
+          </p>
+          <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-indigo-500 transition-all duration-300"
+              style={{ width: `${(localProgress.current / localProgress.total) * 100}%` }}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={startLocalAnalysis}
+              className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-xs font-semibold transition-colors"
+            >
+              Analyze locally
+            </button>
+            {gameId && (
+              <a
+                href={`https://lichess.org/${gameId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 text-xs font-medium text-zinc-400 hover:text-zinc-200 text-center transition-colors"
+              >
+                Open on Lichess →
+              </a>
+            )}
+          </div>
+          <p className="text-[10px] text-zinc-600 mt-2">
+            Local analysis takes ~1 min. If you request it on Lichess, this page updates automatically.
+          </p>
+        </>
       )}
     </div>
   ) : currentMoment ? (
@@ -1481,10 +1509,10 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
   );
 }
 
-function GameReview({ game, gameId, onReset, apiKey, tone, onPatchMoment, analysisStatus }) {
+function GameReview({ game, gameId, onReset, apiKey, tone, onPatchMoment, analysisStatus, localProgress, startLocalAnalysis }) {
   return (
     <GameContext.Provider value={game}>
-      <GameReviewContent gameId={gameId} onReset={onReset} apiKey={apiKey} tone={tone} onPatchMoment={onPatchMoment} analysisStatus={analysisStatus} />
+      <GameReviewContent gameId={gameId} onReset={onReset} apiKey={apiKey} tone={tone} onPatchMoment={onPatchMoment} analysisStatus={analysisStatus} localProgress={localProgress} startLocalAnalysis={startLocalAnalysis} />
     </GameContext.Provider>
   );
 }
@@ -1500,7 +1528,9 @@ export default function App() {
   const [gameId, setGameId] = useState(null);
   const [importError, setImportError] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState(null); // null | 'awaiting-evals' | 'loading' | 'done' | 'error'
+  const [localProgress, setLocalProgress] = useState(null); // null | { current, total }
   const pollingRef = useRef(null);
+  const localAbortRef = useRef(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1523,6 +1553,8 @@ export default function App() {
         const parsed = parseGame(pgn);
         if (parsed.hasEvals) {
           clearInterval(pollingRef.current);
+          localAbortRef.current?.abort();
+          setLocalProgress(null);
           setGameData(parsed);
           if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, gameId);
           else setAnalysisStatus(null);
@@ -1531,6 +1563,42 @@ export default function App() {
     }, 5000);
     return () => clearInterval(pollingRef.current);
   }, [analysisStatus, gameId]);
+
+  const startLocalAnalysis = async () => {
+    const controller = new AbortController();
+    localAbortRef.current = controller;
+    setLocalProgress({ current: 0, total: gameData.positions.length - 1 });
+
+    const evalsKey = `chess-evals-${gameId}`;
+    try {
+      const raw = localStorage.getItem(evalsKey);
+      if (raw) {
+        const { data, ts } = JSON.parse(raw);
+        if (Date.now() - ts < CACHE_TTL) {
+          const reclassified = reclassifyWithEvals(gameData, data);
+          setGameData(reclassified);
+          setLocalProgress(null);
+          if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId);
+          else setAnalysisStatus(null);
+          return;
+        }
+        localStorage.removeItem(evalsKey);
+      }
+    } catch { localStorage.removeItem(evalsKey); }
+
+    const evals = await analyzeFullGame(gameData.positions, {
+      signal: controller.signal,
+      onProgress: (current, total) => setLocalProgress({ current, total }),
+    });
+    if (!evals) return;
+
+    localStorage.setItem(evalsKey, JSON.stringify({ data: evals, ts: Date.now() }));
+    const reclassified = reclassifyWithEvals(gameData, evals);
+    setGameData(reclassified);
+    setLocalProgress(null);
+    if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId);
+    else setAnalysisStatus(null);
+  };
 
   const doImport = async (id, force = false) => {
     setScreen("loading");
@@ -1577,7 +1645,11 @@ export default function App() {
     }
     setAnalysisStatus("loading");
     try {
-      const result = await analyzeGame(pgn, game.moments, game.summary, game.evals, key, t);
+      const effectivePgn = pgn ?? game.positions.slice(1).map((p, i) => {
+        const n = Math.ceil((i + 1) / 2);
+        return (i % 2 === 0 ? `${n}. ` : "") + p.san;
+      }).join(" ");
+      const result = await analyzeGame(effectivePgn, game.moments, game.summary, game.evals, key, t);
       localStorage.setItem(cacheKey, JSON.stringify({ data: result, ts: Date.now() }));
       setGameData((prev) => mergeAnalysis(prev, result));
       setAnalysisStatus("done");
@@ -1604,7 +1676,7 @@ export default function App() {
 
   if (screen === "loading") return <LoadingScreen />;
   if (screen === "review" && gameData) {
-    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} tone={tone} onPatchMoment={patchMomentExplanation} analysisStatus={analysisStatus} />;
+    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} tone={tone} onPatchMoment={patchMomentExplanation} analysisStatus={analysisStatus} localProgress={localProgress} startLocalAnalysis={startLocalAnalysis} />;
   }
   return (
     <ImportScreen

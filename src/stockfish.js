@@ -97,6 +97,21 @@ export function analyzePosition(fen, depth = 12, numPv = 3) {
   });
 }
 
+export async function analyzeFullGame(positions, { onProgress, signal } = {}) {
+  const evals = [0.0];
+  for (let i = 1; i < positions.length; i++) {
+    if (signal?.aborted) return null;
+    const lines = await analyzePosition(positions[i].fen, 10, 1).catch(() => null);
+    const r = lines?.[0];
+    const score = r
+      ? (r.mate != null ? (r.mate > 0 ? 99 : -99) : (r.score ?? 0))
+      : evals[evals.length - 1];
+    evals.push(score);
+    onProgress?.(i, positions.length - 1);
+  }
+  return signal?.aborted ? null : evals;
+}
+
 export function engineLineText(lines) {
   if (!lines || lines.length === 0) return null;
   const depth = lines[0]?.depth;

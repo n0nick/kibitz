@@ -131,3 +131,31 @@ export function parseGame(pgn) {
 
   return { summary, positions, evals, moments, momentByMoveIdx, keyMoveIdxs, hasEvals };
 }
+
+export function reclassifyWithEvals(parsed, evals) {
+  const { positions } = parsed;
+  const moments = [];
+  let momentId = 1;
+  for (let i = 1; i < positions.length; i++) {
+    const pos = positions[i];
+    const loss = evalLoss(evals[i - 1], evals[i], pos.color);
+    const classification = classify(loss);
+    if (classification !== "good") {
+      const moveNum = Math.ceil(i / 2);
+      moments.push({
+        id: momentId++,
+        moveIdx: i,
+        moveNumber: i % 2 === 1 ? `${moveNum}.` : `${moveNum}...`,
+        notation: pos.san,
+        player: pos.color === "w" ? "white" : "black",
+        classification,
+        explanation: null,
+        betterMoves: [],
+        qa: null,
+      });
+    }
+  }
+  const momentByMoveIdx = Object.fromEntries(moments.map((m) => [m.moveIdx, m]));
+  const keyMoveIdxs = moments.map((m) => m.moveIdx);
+  return { ...parsed, evals, hasEvals: true, moments, momentByMoveIdx, keyMoveIdxs };
+}
