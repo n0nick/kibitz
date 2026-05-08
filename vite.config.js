@@ -9,6 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB — covers stockfish.wasm (7.3 MB)
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,webp,woff,woff2}'],
       },
       manifest: {
         name: 'Kibitz',
