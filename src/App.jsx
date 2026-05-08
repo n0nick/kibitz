@@ -754,7 +754,7 @@ function GameReviewContent({ gameId, onReset }) {
 
   const stepMove = (dir) => {
     const next = moveIdx + dir;
-    if (next >= 0 && next < positions.length) jumpTo(next);
+    if (next >= 1 && next < positions.length) jumpTo(next);
   };
 
   useEffect(() => {
@@ -869,7 +869,7 @@ function GameReviewContent({ gameId, onReset }) {
       </button>
       <button
         onClick={() => stepMove(-1)}
-        disabled={moveIdx === 0}
+        disabled={moveIdx <= 1}
         className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 active:bg-zinc-600 transition-colors text-base"
         aria-label="Previous move"
       >
