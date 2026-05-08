@@ -1115,7 +1115,13 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
     return 1;
   });
   const [showSummary, setShowSummary] = useState(false);
-  const [chatHistory, setChatHistory] = useState({});
+  const chatKey = `chess-chat-${gameId}`;
+  const [chatHistory, setChatHistory] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(chatKey) ?? "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem(chatKey, JSON.stringify(chatHistory)); } catch {}
+  }, [chatHistory]);
   const [analysisCache, setAnalysisCache] = useState({});
   const [expandedAlt, setExpandedAlt] = useState(null);
   const [hoverHighlight, setHoverHighlight] = useState(null);
@@ -1549,14 +1555,22 @@ export default function App() {
     }
   };
 
+  const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
   const runAnalysis = async (game, pgn, key, t, id, force = false) => {
     const cacheKey = `chess-analysis-${id}-${t}`;
-    const cached = !force && localStorage.getItem(cacheKey);
-    if (cached) {
+    if (!force) {
       try {
-        setGameData((prev) => mergeAnalysis(prev, JSON.parse(cached)));
-        setAnalysisStatus("done");
-        return;
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const { data, ts } = JSON.parse(raw);
+          if (Date.now() - ts < CACHE_TTL) {
+            setGameData((prev) => mergeAnalysis(prev, data));
+            setAnalysisStatus("done");
+            return;
+          }
+          localStorage.removeItem(cacheKey);
+        }
       } catch {
         localStorage.removeItem(cacheKey);
       }
@@ -1564,7 +1578,7 @@ export default function App() {
     setAnalysisStatus("loading");
     try {
       const result = await analyzeGame(pgn, game.moments, game.summary, game.evals, key, t);
-      localStorage.setItem(cacheKey, JSON.stringify(result));
+      localStorage.setItem(cacheKey, JSON.stringify({ data: result, ts: Date.now() }));
       setGameData((prev) => mergeAnalysis(prev, result));
       setAnalysisStatus("done");
     } catch (e) {

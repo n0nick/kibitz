@@ -1,27 +1,17 @@
 # Chess Reviewer — TODO
 
-## In progress
-- Lichess account integration (personal API token → games list → on-demand analysis request)
+## High priority
 
-## Planned
+- **Stockfish full-game analysis** — use WASM engine to generate evals for games without Lichess computer analysis (replaces the `awaiting-evals` blocking state entirely)
 
-### Lichess
-- Upgrade from personal token to full OAuth 2.0 PKCE flow
+## Medium priority
+
+- **PGN paste / file upload** — third import mode alongside URL and games list; needed for offline/private games
+- **Analysis level personas** — expand beyond Beginner/Intermediate/Advanced; e.g. named coaches with different styles
+
+## Lower priority / future
+
+- **Lichess OAuth 2.0 PKCE** — replace personal token with proper OAuth so users don't have to create/paste a token manually
   (ref: https://lichess.org/api#section/Introduction/Authentication)
-  so users don't need to manually create/paste a token
-
-### Analysis
-- Per-game analysis TTL / cache expiry (currently cached indefinitely)
-- Stockfish WASM fallback for games without Lichess evals
-- More tones selection: Beginner / Novice / Intermediate / Club / Expert - or
-  maybe personas or something else
-
-### UI / UX
-- Style polish pass (spacing, typography, mobile tweaks)
-- PGN paste / file upload as a third import mode
-- Links should support opening in new tab etc.
-
-### Future
-- Lichess OAuth games list (private games, puzzles, studies)
-- Multi-game history view / session persistence
-- Look into Anthropic full OAuth PKCD flow
+- **Multi-game session history** — remember recently reviewed games across sessions
+- **Anthropic OAuth** — look into whether API key flow can be replaced with OAuth (currently requires user to supply key)
