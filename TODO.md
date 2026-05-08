@@ -2,7 +2,6 @@
 
 ## Medium priority
 
-- **PGN paste / file upload** — third import mode alongside URL and games list; needed for offline/private games
 - **Analysis level personas** — expand beyond Beginner/Intermediate/Advanced; e.g. named coaches with different styles
 
 ## Lower priority / future
