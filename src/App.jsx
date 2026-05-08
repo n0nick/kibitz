@@ -797,6 +797,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
   const [loading, setLoading] = useState(false);
   const [keyDraft, setKeyDraft] = useState(apiKey);
   const [keyVisible, setKeyVisible] = useState(false);
+  const [forceReanalyze, setForceReanalyze] = useState(false);
 
   const saveKey = () => setApiKey(keyDraft);
 
@@ -807,8 +808,9 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
       return;
     }
     setLoading(true);
-    await onImport(gameId);
+    await onImport(gameId, forceReanalyze);
     setLoading(false);
+    setForceReanalyze(false);
   };
 
   return (
@@ -845,6 +847,15 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
           >
             {loading ? "Loading…" : "Import game"}
           </button>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={forceReanalyze}
+              onChange={(e) => setForceReanalyze(e.target.checked)}
+              className="w-3.5 h-3.5 accent-indigo-500"
+            />
+            <span className="text-xs text-zinc-500">Re-analyze (skip cache)</span>
+          </label>
         </div>
 
         <div className="text-center">
@@ -1139,8 +1150,19 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
     )
   );
 
-  const chatSection = currentMoment && (
-    <Chat moment={currentMoment} history={chatHistory} setHistory={setChatHistory} apiKey={apiKey} tone={tone} onHover={setHoverHighlight} />
+  const chatMoment = currentMoment ?? (moveIdx > 0 ? {
+    id: `pos-${moveIdx}`,
+    moveIdx,
+    moveNumber: `${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? "." : "..."}`,
+    notation: currentPos.san,
+    classification: "good",
+    explanation: typeof analysisCache[moveIdx] === "string" && analysisCache[moveIdx] !== "loading" && analysisCache[moveIdx] !== "error"
+      ? analysisCache[moveIdx] : null,
+    qa: null,
+  } : null);
+
+  const chatSection = chatMoment && (
+    <Chat moment={chatMoment} history={chatHistory} setHistory={setChatHistory} apiKey={apiKey} tone={tone} onHover={setHoverHighlight} />
   );
 
   const controls = (
@@ -1309,7 +1331,7 @@ export default function App() {
     }
   }, []);
 
-  const doImport = async (id) => {
+  const doImport = async (id, force = false) => {
     setScreen("loading");
     setImportError(null);
     try {
@@ -1326,16 +1348,16 @@ export default function App() {
       setGameData(parsed);
       setGameId(id);
       setScreen("review");
-      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id);
+      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force);
     } catch (e) {
       setImportError(e.message);
       setScreen("import");
     }
   };
 
-  const runAnalysis = async (game, pgn, key, t, id) => {
+  const runAnalysis = async (game, pgn, key, t, id, force = false) => {
     const cacheKey = `chess-analysis-${id}-${t}`;
-    const cached = localStorage.getItem(cacheKey);
+    const cached = !force && localStorage.getItem(cacheKey);
     if (cached) {
       try {
         setGameData((prev) => mergeAnalysis(prev, JSON.parse(cached)));
