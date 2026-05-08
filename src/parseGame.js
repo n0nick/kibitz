@@ -38,10 +38,10 @@ function buildPositions(pgn) {
   chess.loadPgn(pgn);
   const history = chess.history({ verbose: true });
   const temp = new Chess();
-  const out = [{ fen: temp.fen(), san: null, color: null }];
+  const out = [{ fen: temp.fen(), san: null, color: null, from: null, to: null }];
   for (const mv of history) {
     temp.move(mv.san);
-    out.push({ fen: temp.fen(), san: mv.san, color: mv.color });
+    out.push({ fen: temp.fen(), san: mv.san, color: mv.color, from: mv.from, to: mv.to });
   }
   return out;
 }

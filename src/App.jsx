@@ -265,7 +265,7 @@ function parseFen(fen) {
 
 // ─── Chess board ──────────────────────────────────────────────────────────────
 
-function Board({ fen }) {
+function Board({ fen, fromSq, toSq }) {
   const board = parseFen(fen);
   const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
   const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"];
@@ -288,11 +288,16 @@ function Board({ fen }) {
             {board.map((rank, ri) =>
               rank.map((piece, fi) => {
                 const light = (ri + fi) % 2 === 0;
+                const sq = `${"abcdefgh"[fi]}${8 - ri}`;
+                const highlighted = sq === fromSq || sq === toSq;
+                const bg = highlighted
+                  ? light ? "#f6f669" : "#baca44"
+                  : light ? "#f0d9b5" : "#b58863";
                 return (
                   <div
                     key={`${ri}-${fi}`}
                     className="aspect-square flex items-center justify-center"
-                    style={{ background: light ? "#f0d9b5" : "#b58863" }}
+                    style={{ background: bg }}
                   >
                     {piece && (
                       <span
@@ -1034,7 +1039,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
           className="shrink-0 md:w-[420px] md:overflow-y-auto md:border-r md:border-zinc-800"
         >
           <div className="px-4 pt-5 pb-3">
-            <Board fen={currentPos.fen} />
+            <Board fen={currentPos.fen} fromSq={currentPos.from} toSq={currentPos.to} />
           </div>
           <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
           {controls}
