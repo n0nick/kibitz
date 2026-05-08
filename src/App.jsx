@@ -807,6 +807,15 @@ function setCachedPgn(id, pgn) {
   try { localStorage.setItem(`kibitz-pgn-${id}`, JSON.stringify({ data: pgn, ts: Date.now() })); } catch {}
 }
 
+function pgnGameId(pgn) {
+  const m = pgn.match(/\[Site\s+"https?:\/\/(?:www\.)?lichess\.org\/([a-zA-Z0-9]{8})(?:[/?#][^"]*)?"]/);
+  if (m) return m[1];
+  const moves = pgn.replace(/\[[^\]]*\]/g, '').replace(/\{[^}]*\}/g, '').replace(/\s+/g, ' ').trim();
+  let h = 0;
+  for (let i = 0; i < moves.length; i++) h = Math.imul(31, h) + moves.charCodeAt(i) | 0;
+  return `pgn-${(h >>> 0).toString(36)}`;
+}
+
 // ─── API key hook ─────────────────────────────────────────────────────────────
 
 const API_KEY_STORAGE = "kibitz-anthropic-key";
@@ -848,7 +857,7 @@ function useLichess() {
 
 // ─── Import screen ────────────────────────────────────────────────────────────
 
-function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, tone, setTone, lichessToken, lichessUser, setLichess }) {
+function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, setApiKey, tone, setTone, lichessToken, lichessUser, setLichess }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState(null);
@@ -899,7 +908,9 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
     }
   };
 
-  const urlGameId = parseLichessUrl(url);
+  const isPgn = url.trim().length > 0 && !url.includes('://');
+  const urlGameId = !isPgn ? parseLichessUrl(url) : null;
+  const canLoad = isPgn || urlGameId !== null;
 
   const handleListLoad = async (id) => {
     setLoading(true);
@@ -911,10 +922,15 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
   };
 
   const handleUrlLoad = async () => {
-    if (!urlGameId) return;
+    if (!canLoad) return;
     setLoading(true);
-    setLoadingId(urlGameId);
-    await onImport(urlGameId, forceReanalyze);
+    if (isPgn) {
+      setLoadingId("pgn");
+      await onImportPgn(url, forceReanalyze);
+    } else {
+      setLoadingId(urlGameId);
+      await onImport(urlGameId, forceReanalyze);
+    }
     setLoading(false);
     setLoadingId(null);
     setForceReanalyze(false);
@@ -1014,25 +1030,32 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
           </div>
         )}
 
-        {/* URL — compact, secondary */}
+        {/* URL / PGN input */}
         <div className="space-y-2">
-          {lichessUser && <p className="text-xs text-zinc-600 text-center">— or paste a URL —</p>}
+          {lichessUser && <p className="text-xs text-zinc-600 text-center">— or paste a URL or PGN —</p>}
           <div className="flex gap-2">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => { setUrl(e.target.value); setError(null); }}
-              onKeyDown={(e) => e.key === "Enter" && handleUrlLoad()}
-              placeholder="https://lichess.org/abc12345"
-              className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
-              autoFocus={!lichessUser}
-            />
+            <div className="relative flex-1 min-w-0">
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => { setUrl(e.target.value); setError(null); }}
+                onKeyDown={(e) => e.key === "Enter" && handleUrlLoad()}
+                placeholder="https://lichess.org/… or paste a PGN"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+                autoFocus={!lichessUser}
+              />
+              {isPgn && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-indigo-400 bg-indigo-950/60 px-1.5 py-0.5 rounded pointer-events-none">
+                  PGN
+                </span>
+              )}
+            </div>
             <button
               onClick={handleUrlLoad}
-              disabled={loading || !urlGameId}
+              disabled={loading || !canLoad}
               className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-30 rounded-xl text-sm font-semibold transition-colors shrink-0"
             >
-              {loadingId === urlGameId && loading ? "…" : "Load →"}
+              {loadingId && loading ? "…" : "Load →"}
             </button>
           </div>
           {error && (
@@ -1682,6 +1705,27 @@ export default function App() {
     }
   };
 
+  const doImportPgn = async (pgn, force = false) => {
+    setScreen("loading");
+    setImportError(null);
+    try {
+      const parsed = parseGame(pgn);
+      const id = pgnGameId(pgn);
+      setCachedPgn(id, pgn);
+      setGameData(parsed);
+      setGameId(id);
+      setScreen("review");
+      if (!parsed.hasEvals) {
+        setAnalysisStatus("awaiting-evals");
+        return;
+      }
+      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force);
+    } catch (e) {
+      setImportError(e.message ?? "Invalid PGN");
+      setScreen("import");
+    }
+  };
+
   const runAnalysis = async (game, pgn, key, t, id, force = false) => {
     const cacheKey = `kibitz-analysis-${id}-${t}`;
     if (!force) {
@@ -1738,6 +1782,7 @@ export default function App() {
   return (
     <ImportScreen
       onImport={doImport}
+      onImportPgn={doImportPgn}
       onDemo={() => {
         setGameData(DEMO_GAME);
         setGameId("opera-1858");
