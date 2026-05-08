@@ -90,15 +90,32 @@ Rules:
 - ${ANNOTATION_RULES}`;
 }
 
+function repairJson(raw) {
+  // Escape literal newlines/tabs inside JSON strings (LLMs often emit these)
+  let out = "", inStr = false, esc = false;
+  for (const ch of raw) {
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === "\\" && inStr) { out += ch; esc = true; continue; }
+    if (ch === '"') { out += ch; inStr = !inStr; continue; }
+    if (inStr) {
+      if (ch === "\n") { out += "\\n"; continue; }
+      if (ch === "\r") { out += "\\r"; continue; }
+      if (ch === "\t") { out += "\\t"; continue; }
+    }
+    out += ch;
+  }
+  return out;
+}
+
 export async function analyzeGame(pgn, moments, summary, evals, apiKey, tone = "beginner") {
   const text = await callApi(
     [{ role: "user", content: buildPrompt(pgn, moments, summary, evals, tone) }],
     apiKey,
-    { maxTokens: 4096 }
+    { maxTokens: 8192 }
   );
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("No JSON in API response");
-  return JSON.parse(match[0]);
+  return JSON.parse(repairJson(match[0]));
 }
 
 export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone }, apiKey) {
