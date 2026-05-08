@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame, sanToSquares } from "./parseGame";
-import { analyzeGame } from "./analyzeGame";
+import { analyzeGame, analyzeSinglePosition, chatAboutPosition, TONES } from "./analyzeGame";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
 
@@ -508,8 +508,10 @@ function MoveTimeline({ moveIdx, onJump }) {
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
-function Chat({ moment, history, setHistory }) {
+function Chat({ moment, history, setHistory, apiKey, tone }) {
+  const { summary } = useContext(GameContext);
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
   const endRef = useRef(null);
   const msgs = history[moment.id] || [];
 
@@ -517,36 +519,37 @@ function Chat({ moment, history, setHistory }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [history, moment.id]);
 
-  const send = () => {
+  const send = async () => {
     const q = input.trim();
-    if (!q) return;
-    let answer;
-    if (moment.qa) {
-      const lq = q.toLowerCase();
-      const lqa = moment.qa.question.toLowerCase();
-      const qaWords = lqa.split(/\W+/).filter((w) => w.length > 4);
-      const overlap = qaWords.filter((w) => lq.includes(w));
-      answer =
-        overlap.length >= 2
-          ? moment.qa.answer
-          : `(LLM response would appear here — asking about the position after ${moment.moveNumber} ${moment.notation}. In a production version, the coaching engine would analyze your specific question and provide a tailored explanation.)`;
-    } else {
-      answer = `(LLM response would appear here — asking about the position after ${moment.moveNumber} ${moment.notation}. In a production version, the coaching engine would analyze your specific question and provide a tailored explanation.)`;
-    }
+    if (!q || sending) return;
+    setSending(true);
+    setInput("");
+    const currentMsgs = msgs;
     setHistory((prev) => ({
       ...prev,
-      [moment.id]: [
-        ...(prev[moment.id] || []),
-        { role: "user", text: q },
-        { role: "assistant", text: answer },
-      ],
+      [moment.id]: [...(prev[moment.id] || []), { role: "user", text: q }],
     }));
-    setInput("");
+    try {
+      const answer = apiKey
+        ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone }, apiKey)
+        : "Add an Anthropic API key on the import screen to enable AI chat.";
+      setHistory((prev) => ({
+        ...prev,
+        [moment.id]: [...(prev[moment.id] || []), { role: "assistant", text: answer }],
+      }));
+    } catch {
+      setHistory((prev) => ({
+        ...prev,
+        [moment.id]: [...(prev[moment.id] || []), { role: "assistant", text: "Analysis failed. Check your API key." }],
+      }));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <div className="mx-4 mb-8">
-      {msgs.length === 0 && moment.qa && (
+      {msgs.length === 0 && !sending && moment.qa?.question && (
         <button
           className="w-full text-left text-xs text-zinc-500 bg-zinc-900/50 rounded-xl px-4 py-3 mb-3 border border-zinc-800 hover:border-zinc-700 active:bg-zinc-800 transition-colors"
           onClick={() => setInput(moment.qa.question)}
@@ -555,7 +558,7 @@ function Chat({ moment, history, setHistory }) {
           <span className="italic">"{moment.qa.question}"</span>
         </button>
       )}
-      {msgs.length > 0 && (
+      {(msgs.length > 0 || sending) && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl mb-3 overflow-hidden divide-y divide-zinc-800/70">
           {msgs.map((msg, i) => (
             <div
@@ -572,6 +575,12 @@ function Chat({ moment, history, setHistory }) {
               <p>{msg.text}</p>
             </div>
           ))}
+          {sending && (
+            <div className="px-4 py-3 text-sm text-zinc-500 italic animate-pulse">
+              <div className="text-[9px] font-bold uppercase tracking-widest mb-1.5 text-indigo-500">Coach</div>
+              Thinking…
+            </div>
+          )}
           <div ref={endRef} />
         </div>
       )}
@@ -582,11 +591,13 @@ function Chat({ moment, history, setHistory }) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder="Ask about this position…"
-          className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+          disabled={sending}
+          className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-50 transition-colors"
         />
         <button
           onClick={send}
-          className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 rounded-xl text-sm font-semibold transition-colors shrink-0"
+          disabled={sending || !input.trim()}
+          className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 rounded-xl text-sm font-semibold transition-colors shrink-0"
         >
           Ask
         </button>
@@ -722,9 +733,15 @@ function useApiKey() {
   return [apiKey, setApiKey];
 }
 
+function useTone() {
+  const [tone, setToneState] = useState(() => localStorage.getItem("chess-reviewer-tone") ?? "beginner");
+  const setTone = (v) => { localStorage.setItem("chess-reviewer-tone", v); setToneState(v); };
+  return [tone, setTone];
+}
+
 // ─── Import screen ────────────────────────────────────────────────────────────
 
-function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey }) {
+function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, tone, setTone }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [keyDraft, setKeyDraft] = useState(apiKey);
@@ -819,6 +836,26 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey }) 
           </p>
         </div>
 
+        {/* Tone */}
+        <div className="space-y-2">
+          <label className="text-xs text-zinc-500 uppercase tracking-widest">Analysis level</label>
+          <div className="flex gap-2">
+            {TONES.map((t) => (
+              <button
+                key={t.value}
+                onClick={() => setTone(t.value)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                  tone === t.value
+                    ? "bg-zinc-700 border-zinc-500 text-zinc-100"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <p className="text-xs text-zinc-600 text-center leading-relaxed">
           Only games with computer analysis are supported. To add analysis, open the game on Lichess and click
           "Request a computer analysis".
@@ -840,7 +877,7 @@ function LoadingScreen() {
 
 // ─── Game review (inner) ──────────────────────────────────────────────────────
 
-function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
+function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analysisStatus }) {
   const { positions, evals, moments, momentByMoveIdx, keyMoveIdxs, summary } = useContext(GameContext);
 
   const [moveIdx, setMoveIdx] = useState(() => {
@@ -856,6 +893,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
   const [analysisCache, setAnalysisCache] = useState({});
   const [expandedAlt, setExpandedAlt] = useState(null);
   const [hoverHighlight, setHoverHighlight] = useState(null);
+  const [momentLoading, setMomentLoading] = useState({});
   const touchStartX = useRef(null);
   const scrollRef = useRef(null);
   const leftPanelRef = useRef(null);
@@ -933,13 +971,42 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
       <div className="px-4 py-4">
         {currentMoment.explanation ? (
           <p className="text-sm text-zinc-300 leading-[1.75]"><AnnotatedText text={currentMoment.explanation} onHover={setHoverHighlight} fenBefore={positions[currentMoment.moveIdx - 1]?.fen} fenAfter={positions[currentMoment.moveIdx]?.fen} /></p>
+        ) : momentLoading[currentMoment.id] === "loading" ? (
+          <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
+        ) : momentLoading[currentMoment.id] === "error" ? (
+          <p className="text-sm text-red-500/70">Analysis failed. Check your API key.</p>
         ) : analysisStatus === "loading" ? (
           <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
         ) : analysisStatus === "error" ? (
           <p className="text-sm text-red-500/70">Analysis failed. Check your API key.</p>
-        ) : !apiKey ? (
+        ) : apiKey ? (
+          <button
+            onClick={async () => {
+              setMomentLoading((prev) => ({ ...prev, [currentMoment.id]: "loading" }));
+              try {
+                const text = await analyzeSinglePosition({
+                  summary,
+                  moveNumber: currentMoment.moveNumber,
+                  notation: currentMoment.notation,
+                  classification: currentMoment.classification,
+                  evalBefore: evals[currentMoment.moveIdx - 1] ?? 0,
+                  evalAfter: evals[currentMoment.moveIdx],
+                  fen: positions[currentMoment.moveIdx]?.fen,
+                  tone,
+                }, apiKey);
+                onPatchMoment(currentMoment.id, text);
+                setMomentLoading((prev) => ({ ...prev, [currentMoment.id]: "done" }));
+              } catch {
+                setMomentLoading((prev) => ({ ...prev, [currentMoment.id]: "error" }));
+              }
+            }}
+            className="text-xs text-zinc-500 border border-zinc-700/60 rounded-xl px-4 py-2.5 hover:border-zinc-600 hover:text-zinc-300 transition-colors"
+          >
+            Analyze this moment
+          </button>
+        ) : (
           <p className="text-sm text-zinc-600">Add an Anthropic API key on the import screen to enable AI analysis.</p>
-        ) : null}
+        )}
       </div>
       {currentMoment.betterMoves && currentMoment.betterMoves.length > 0 && (
         <div className="px-4 pb-4 border-t border-zinc-800/60 pt-3.5">
@@ -980,17 +1047,36 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
           <EvalBar before={evals[moveIdx - 1] ?? 0} after={evals[moveIdx]} />
         </div>
         <div className="px-4 py-4">
-          {analysisCache[moveIdx] ? (
+          {analysisCache[moveIdx] === "loading" ? (
+            <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
+          ) : analysisCache[moveIdx] === "error" ? (
+            <p className="text-sm text-red-500/70">Analysis failed. Check your API key.</p>
+          ) : analysisCache[moveIdx] ? (
             <p className="text-sm text-zinc-400 leading-[1.75]">{analysisCache[moveIdx]}</p>
           ) : (
             <button
-              onClick={() =>
-                setAnalysisCache((prev) => ({
-                  ...prev,
-                  [moveIdx]: `(LLM analysis for ${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? "." : "..."} ${currentPos.san} — in production this would include positional assessment, key threats, and coaching notes tailored to this position.)`,
-                }))
-              }
-              className="text-xs text-zinc-500 border border-zinc-700/60 rounded-xl px-4 py-2.5 hover:border-zinc-600 hover:text-zinc-300 transition-colors"
+              onClick={async () => {
+                if (!apiKey) return;
+                setAnalysisCache((prev) => ({ ...prev, [moveIdx]: "loading" }));
+                try {
+                  const mn = `${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? "." : "..."}`;
+                  const text = await analyzeSinglePosition({
+                    summary,
+                    moveNumber: mn,
+                    notation: currentPos.san,
+                    classification: "good",
+                    evalBefore: evals[moveIdx - 1] ?? 0,
+                    evalAfter: evals[moveIdx],
+                    fen: currentPos.fen,
+                    tone,
+                  }, apiKey);
+                  setAnalysisCache((prev) => ({ ...prev, [moveIdx]: text }));
+                } catch {
+                  setAnalysisCache((prev) => ({ ...prev, [moveIdx]: "error" }));
+                }
+              }}
+              disabled={!apiKey}
+              className="text-xs text-zinc-500 border border-zinc-700/60 rounded-xl px-4 py-2.5 hover:border-zinc-600 hover:text-zinc-300 disabled:opacity-40 transition-colors"
             >
               Analyze this position
             </button>
@@ -1001,7 +1087,7 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
   );
 
   const chatSection = currentMoment && (
-    <Chat moment={currentMoment} history={chatHistory} setHistory={setChatHistory} />
+    <Chat moment={currentMoment} history={chatHistory} setHistory={setChatHistory} apiKey={apiKey} tone={tone} />
   );
 
   const controls = (
@@ -1138,10 +1224,10 @@ function GameReviewContent({ gameId, onReset, apiKey, analysisStatus }) {
   );
 }
 
-function GameReview({ game, gameId, onReset, apiKey, analysisStatus }) {
+function GameReview({ game, gameId, onReset, apiKey, tone, onPatchMoment, analysisStatus }) {
   return (
     <GameContext.Provider value={game}>
-      <GameReviewContent gameId={gameId} onReset={onReset} apiKey={apiKey} analysisStatus={analysisStatus} />
+      <GameReviewContent gameId={gameId} onReset={onReset} apiKey={apiKey} tone={tone} onPatchMoment={onPatchMoment} analysisStatus={analysisStatus} />
     </GameContext.Provider>
   );
 }
@@ -1150,6 +1236,7 @@ function GameReview({ game, gameId, onReset, apiKey, analysisStatus }) {
 
 export default function App() {
   const [apiKey, setApiKey] = useApiKey();
+  const [tone, setTone] = useTone();
   const [screen, setScreen] = useState("import");
   const [gameData, setGameData] = useState(null);
   const [gameId, setGameId] = useState(null);
@@ -1186,23 +1273,30 @@ export default function App() {
       setGameData(parsed);
       setGameId(id);
       setScreen("review");
-      if (apiKey) runAnalysis(parsed, pgn, apiKey);
+      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone);
     } catch (e) {
       setImportError(e.message);
       setScreen("import");
     }
   };
 
-  const runAnalysis = async (game, pgn, key) => {
+  const runAnalysis = async (game, pgn, key, t) => {
     setAnalysisStatus("loading");
     try {
-      const result = await analyzeGame(pgn, game.moments, game.summary, game.evals, key);
+      const result = await analyzeGame(pgn, game.moments, game.summary, game.evals, key, t);
       setGameData((prev) => mergeAnalysis(prev, result));
       setAnalysisStatus("done");
     } catch (e) {
       console.error("Analysis failed:", e);
       setAnalysisStatus("error");
     }
+  };
+
+  const patchMomentExplanation = (momentId, explanation) => {
+    setGameData((prev) => {
+      const moments = prev.moments.map((m) => m.id === momentId ? { ...m, explanation } : m);
+      return { ...prev, moments, momentByMoveIdx: Object.fromEntries(moments.map((m) => [m.moveIdx, m])) };
+    });
   };
 
   const handleReset = () => {
@@ -1215,7 +1309,7 @@ export default function App() {
 
   if (screen === "loading") return <LoadingScreen />;
   if (screen === "review" && gameData) {
-    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} analysisStatus={analysisStatus} />;
+    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} tone={tone} onPatchMoment={patchMomentExplanation} analysisStatus={analysisStatus} />;
   }
   return (
     <ImportScreen
@@ -1229,6 +1323,8 @@ export default function App() {
       setError={setImportError}
       apiKey={apiKey}
       setApiKey={setApiKey}
+      tone={tone}
+      setTone={setTone}
     />
   );
 }
