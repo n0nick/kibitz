@@ -626,11 +626,30 @@ function SummaryScreen({ onClose, onJump }) {
   );
 }
 
+// ─── API key hook ─────────────────────────────────────────────────────────────
+
+const API_KEY_STORAGE = "chess-reviewer-anthropic-key";
+
+function useApiKey() {
+  const [apiKey, setApiKeyState] = useState(() => localStorage.getItem(API_KEY_STORAGE) ?? "");
+  const setApiKey = (val) => {
+    const trimmed = val.trim();
+    if (trimmed) localStorage.setItem(API_KEY_STORAGE, trimmed);
+    else localStorage.removeItem(API_KEY_STORAGE);
+    setApiKeyState(trimmed);
+  };
+  return [apiKey, setApiKey];
+}
+
 // ─── Import screen ────────────────────────────────────────────────────────────
 
-function ImportScreen({ onImport, onDemo, error, setError }) {
+function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [keyDraft, setKeyDraft] = useState(apiKey);
+  const [keyVisible, setKeyVisible] = useState(false);
+
+  const saveKey = () => setApiKey(keyDraft);
 
   const handleImport = async () => {
     const gameId = parseLichessUrl(url);
@@ -650,6 +669,8 @@ function ImportScreen({ onImport, onDemo, error, setError }) {
           <h1 className="text-2xl font-bold tracking-tight">Chess Reviewer</h1>
           <p className="text-zinc-500 text-sm mt-1">Paste a Lichess game URL to get started</p>
         </div>
+
+        {/* Game URL */}
         <div className="space-y-3">
           <input
             type="url"
@@ -676,6 +697,7 @@ function ImportScreen({ onImport, onDemo, error, setError }) {
             {loading ? "Loading…" : "Import game"}
           </button>
         </div>
+
         <div className="text-center">
           <button
             onClick={onDemo}
@@ -684,6 +706,38 @@ function ImportScreen({ onImport, onDemo, error, setError }) {
             Or try the Opera Game (demo)
           </button>
         </div>
+
+        {/* API key */}
+        <div className="border-t border-zinc-800 pt-5 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-zinc-500 uppercase tracking-widest">Anthropic API key</label>
+            {apiKey && (
+              <span className="text-[10px] text-emerald-500">saved</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type={keyVisible ? "text" : "password"}
+              value={keyDraft}
+              onChange={(e) => setKeyDraft(e.target.value)}
+              onBlur={saveKey}
+              onKeyDown={(e) => e.key === "Enter" && saveKey()}
+              placeholder="sk-ant-…"
+              className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
+            />
+            <button
+              onClick={() => setKeyVisible((v) => !v)}
+              className="px-3 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs"
+              aria-label={keyVisible ? "Hide key" : "Show key"}
+            >
+              {keyVisible ? "hide" : "show"}
+            </button>
+          </div>
+          <p className="text-xs text-zinc-600">
+            Used for AI analysis. Stored in your browser only — never sent anywhere except Anthropic.
+          </p>
+        </div>
+
         <p className="text-xs text-zinc-600 text-center leading-relaxed">
           Only games with computer analysis are supported. To add analysis, open the game on Lichess and click
           "Request a computer analysis".
@@ -705,7 +759,7 @@ function LoadingScreen() {
 
 // ─── Game review (inner) ──────────────────────────────────────────────────────
 
-function GameReviewContent({ gameId, onReset }) {
+function GameReviewContent({ gameId, onReset, apiKey }) {
   const { positions, evals, moments, momentByMoveIdx, keyMoveIdxs, summary } = useContext(GameContext);
 
   const [moveIdx, setMoveIdx] = useState(() => {
@@ -991,10 +1045,10 @@ function GameReviewContent({ gameId, onReset }) {
   );
 }
 
-function GameReview({ game, gameId, onReset }) {
+function GameReview({ game, gameId, onReset, apiKey }) {
   return (
     <GameContext.Provider value={game}>
-      <GameReviewContent gameId={gameId} onReset={onReset} />
+      <GameReviewContent gameId={gameId} onReset={onReset} apiKey={apiKey} />
     </GameContext.Provider>
   );
 }
@@ -1002,6 +1056,7 @@ function GameReview({ game, gameId, onReset }) {
 // ─── App router ───────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [apiKey, setApiKey] = useApiKey();
   const [screen, setScreen] = useState("import");
   const [gameData, setGameData] = useState(null);
   const [gameId, setGameId] = useState(null);
@@ -1052,7 +1107,7 @@ export default function App() {
 
   if (screen === "loading") return <LoadingScreen />;
   if (screen === "review" && gameData) {
-    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} />;
+    return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} />;
   }
   return (
     <ImportScreen
@@ -1064,6 +1119,8 @@ export default function App() {
       }}
       error={importError}
       setError={setImportError}
+      apiKey={apiKey}
+      setApiKey={setApiKey}
     />
   );
 }
