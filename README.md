@@ -2,6 +2,8 @@
 
 A mobile-first web app for reviewing chess games with AI coaching and engine analysis. Load a game from Lichess, get AI-generated commentary on key moments, and chat with a coach about any position.
 
+<img width="590" height="1193" alt="screenshot" src="https://github.com/user-attachments/assets/42b7f953-80af-4890-b753-1d45d249ee74" />
+
 ## Features
 
 - **AI game analysis** — Claude identifies blunders, mistakes, inaccuracies, and brilliant moves, explains what happened and why, and suggests alternatives
