@@ -619,6 +619,21 @@ export default function App() {
     if (target !== undefined) jumpTo(target);
   };
 
+  const stepMove = (dir) => {
+    const next = moveIdx + dir;
+    if (next >= 0 && next < POSITIONS.length) jumpTo(next);
+  };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.key === "ArrowLeft") stepMove(-1);
+      if (e.key === "ArrowRight") stepMove(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moveIdx]);
+
   const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchEnd = (e) => {
     if (touchStartX.current === null) return;
@@ -671,18 +686,26 @@ export default function App() {
         {/* Move timeline */}
         <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
 
-        {/* Navigation — arrows jump key moments, counter shows context */}
-        <div className="flex items-center justify-between px-4 py-2">
+        {/* Navigation: << < [counter] > >> */}
+        <div className="flex items-center justify-between px-3 py-2 gap-1">
           <button
             onClick={() => goKeyMoment(-1)}
             disabled={prevKeyMoment === undefined}
-            className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-zinc-800/60 disabled:opacity-20 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-xs font-bold"
             aria-label="Previous key moment"
           >
-            ←
+            ««
+          </button>
+          <button
+            onClick={() => stepMove(-1)}
+            disabled={moveIdx === 0}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
+            aria-label="Previous move"
+          >
+            ‹
           </button>
 
-          <div className="text-center">
+          <div className="text-center flex-1">
             <div className="text-sm text-zinc-400">
               <span className={`font-semibold tabular-nums ${currentMoment ? "text-zinc-100" : "text-zinc-500"}`}>
                 {counterLabel}
@@ -692,12 +715,20 @@ export default function App() {
           </div>
 
           <button
+            onClick={() => stepMove(1)}
+            disabled={moveIdx === POSITIONS.length - 1}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
+            aria-label="Next move"
+          >
+            ›
+          </button>
+          <button
             onClick={() => goKeyMoment(1)}
             disabled={nextKeyMoment === undefined}
-            className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
+            className="w-9 h-9 flex items-center justify-center rounded-lg bg-zinc-800/60 disabled:opacity-20 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-xs font-bold"
             aria-label="Next key moment"
           >
-            →
+            »»
           </button>
         </div>
 
