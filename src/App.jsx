@@ -794,7 +794,7 @@ const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ─── API key hook ─────────────────────────────────────────────────────────────
 
-const API_KEY_STORAGE = "chess-reviewer-anthropic-key";
+const API_KEY_STORAGE = "kibitz-anthropic-key";
 
 function useApiKey() {
   const [apiKey, setApiKeyState] = useState(() => localStorage.getItem(API_KEY_STORAGE) ?? "");
@@ -808,23 +808,23 @@ function useApiKey() {
 }
 
 function useTone() {
-  const [tone, setToneState] = useState(() => localStorage.getItem("chess-reviewer-tone") ?? "beginner");
-  const setTone = (v) => { localStorage.setItem("chess-reviewer-tone", v); setToneState(v); };
+  const [tone, setToneState] = useState(() => localStorage.getItem("kibitz-tone") ?? "beginner");
+  const setTone = (v) => { localStorage.setItem("kibitz-tone", v); setToneState(v); };
   return [tone, setTone];
 }
 
 function useLichess() {
-  const [token, setTokenState] = useState(() => localStorage.getItem("chess-lichess-token") ?? "");
-  const [username, setUsernameState] = useState(() => localStorage.getItem("chess-lichess-username") ?? "");
+  const [token, setTokenState] = useState(() => localStorage.getItem("kibitz-lichess-token") ?? "");
+  const [username, setUsernameState] = useState(() => localStorage.getItem("kibitz-lichess-username") ?? "");
   const setLichess = (tok, uname) => {
     const t = (tok ?? "").trim();
-    if (t) localStorage.setItem("chess-lichess-token", t);
-    else { localStorage.removeItem("chess-lichess-token"); localStorage.removeItem("chess-lichess-username"); }
+    if (t) localStorage.setItem("kibitz-lichess-token", t);
+    else { localStorage.removeItem("kibitz-lichess-token"); localStorage.removeItem("kibitz-lichess-username"); }
     setTokenState(t);
     if (!t) { setUsernameState(""); return; }
     if (uname !== undefined) {
-      if (uname) localStorage.setItem("chess-lichess-username", uname);
-      else localStorage.removeItem("chess-lichess-username");
+      if (uname) localStorage.setItem("kibitz-lichess-username", uname);
+      else localStorage.removeItem("kibitz-lichess-username");
       setUsernameState(uname ?? "");
     }
   };
@@ -1117,7 +1117,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
     return 1;
   });
   const [showSummary, setShowSummary] = useState(false);
-  const chatKey = `chess-chat-${gameId}`;
+  const chatKey = `kibitz-chat-${gameId}`;
   const [chatHistory, setChatHistory] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem(chatKey) ?? "{}"); } catch { return {}; }
   });
@@ -1212,7 +1212,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
             {(() => {
               let cached = false;
               try {
-                const raw = localStorage.getItem(`chess-evals-${gameId}`);
+                const raw = localStorage.getItem(`kibitz-evals-${gameId}`);
                 if (raw) { const { ts } = JSON.parse(raw); cached = Date.now() - ts < CACHE_TTL; }
               } catch {}
               return (
@@ -1566,7 +1566,7 @@ export default function App() {
           clearInterval(pollingRef.current);
           localAbortRef.current?.abort();
           setLocalProgress(null);
-          localStorage.removeItem(`chess-evals-${gameId}`);
+          localStorage.removeItem(`kibitz-evals-${gameId}`);
           setGameData(parsed);
           if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, gameId);
           else setAnalysisStatus(null);
@@ -1581,7 +1581,7 @@ export default function App() {
     localAbortRef.current = controller;
     setLocalProgress({ current: 0, total: gameData.positions.length - 1 });
 
-    const evalsKey = `chess-evals-${gameId}`;
+    const evalsKey = `kibitz-evals-${gameId}`;
     try {
       const raw = localStorage.getItem(evalsKey);
       if (raw) {
@@ -1636,7 +1636,7 @@ export default function App() {
   };
 
   const runAnalysis = async (game, pgn, key, t, id, force = false) => {
-    const cacheKey = `chess-analysis-${id}-${t}`;
+    const cacheKey = `kibitz-analysis-${id}-${t}`;
     if (!force) {
       try {
         const raw = localStorage.getItem(cacheKey);
