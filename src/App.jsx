@@ -1566,6 +1566,7 @@ export default function App() {
           clearInterval(pollingRef.current);
           localAbortRef.current?.abort();
           setLocalProgress(null);
+          localStorage.removeItem(`chess-evals-${gameId}`);
           setGameData(parsed);
           if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, gameId);
           else setAnalysisStatus(null);
