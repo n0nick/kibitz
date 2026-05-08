@@ -341,7 +341,7 @@ function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq, 
           onMouseLeave={(e) => { e.currentTarget.style.color = "#6b4e2a"; }}
           title="Open position in Lichess Analysis Board"
         >
-          lichess ↗
+          {analysisHref ? "lichess ↗" : "analyze ↗"}
         </a>
       </div>
     </div>
