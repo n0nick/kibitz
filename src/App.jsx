@@ -245,6 +245,13 @@ function mergeAnalysis(game, result) {
   };
 }
 
+// ─── Strip annotation syntax to plain text ───────────────────────────────────
+
+function stripAnnotations(text) {
+  if (!text) return text;
+  return text.replace(/\[\[([^\]|]*?)(?:\|[^\]]*?)?\]\]/g, "$1");
+}
+
 // ─── FEN parser ───────────────────────────────────────────────────────────────
 
 function parseFen(fen) {
@@ -716,13 +723,13 @@ function SummaryContent({ onClose, onJump }) {
         {summary.narrative && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
             <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Game narrative</div>
-            <p className="text-sm text-zinc-300 leading-[1.75]">{summary.narrative}</p>
+            <p className="text-sm text-zinc-300 leading-[1.75]">{stripAnnotations(summary.narrative)}</p>
           </div>
         )}
         {summary.pattern && (
           <div className="bg-indigo-950/50 border border-indigo-500/20 rounded-2xl p-4">
             <div className="text-[9px] text-indigo-400 uppercase tracking-widest mb-2.5">Pattern observed</div>
-            <p className="text-sm text-zinc-300 leading-[1.75]">{summary.pattern}</p>
+            <p className="text-sm text-zinc-300 leading-[1.75]">{stripAnnotations(summary.pattern)}</p>
           </div>
         )}
         <div>
@@ -742,7 +749,7 @@ function SummaryContent({ onClose, onJump }) {
                 <div className="flex-1 min-w-0">
                   <Chip classification={m.classification} small />
                   {m.explanation && (
-                    <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 line-clamp-2">{m.explanation}</p>
+                    <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 line-clamp-2">{stripAnnotations(m.explanation)}</p>
                   )}
                 </div>
                 <span className="text-zinc-600 text-xs mt-0.5 shrink-0">→</span>
