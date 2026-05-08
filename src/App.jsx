@@ -331,7 +331,9 @@ function EvalBar({ before, after }) {
     return ((Math.max(-6, Math.min(6, v)) + 6) / 12) * 100;
   };
   const pct = toPercent(after);
-  const swing = after >= 99 ? 99 - before : after - before;
+  const isMateAfter  = after >= 99;
+  const isMatedAfter = after <= -99;
+  const swing = isMateAfter ? 99 - before : isMatedAfter ? -99 - before : after - before;
   const gaining = swing > 0;
   return (
     <div className="flex items-center gap-2.5">
@@ -344,11 +346,9 @@ function EvalBar({ before, after }) {
       </div>
       <span className="text-xs font-mono tabular-nums text-zinc-300 w-9 shrink-0">{fmt(after)}</span>
       <span className={`text-xs font-semibold w-12 text-right shrink-0 ${gaining ? "text-emerald-400" : "text-red-400"}`}>
-        {after >= 99 ? (
-          <span className="text-emerald-400">mate</span>
-        ) : (
-          <>{gaining ? "▲" : "▼"} {Math.min(Math.abs(swing), 9.9).toFixed(1)}</>
-        )}
+        {isMateAfter  ? "▲ M" :
+         isMatedAfter ? "▼ M" :
+         <>{gaining ? "▲" : "▼"} {Math.min(Math.abs(swing), 9.9).toFixed(1)}</>}
       </span>
     </div>
   );
