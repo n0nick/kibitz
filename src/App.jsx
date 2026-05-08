@@ -790,6 +790,8 @@ function SummaryScreen({ onClose, onJump }) {
   );
 }
 
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 // ─── API key hook ─────────────────────────────────────────────────────────────
 
 const API_KEY_STORAGE = "chess-reviewer-anthropic-key";
@@ -1207,12 +1209,21 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
       ) : (
         <>
           <div className="flex gap-2 mt-3">
-            <button
-              onClick={startLocalAnalysis}
-              className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-xs font-semibold transition-colors"
-            >
-              Analyze locally
-            </button>
+            {(() => {
+              let cached = false;
+              try {
+                const raw = localStorage.getItem(`chess-evals-${gameId}`);
+                if (raw) { const { ts } = JSON.parse(raw); cached = Date.now() - ts < CACHE_TTL; }
+              } catch {}
+              return (
+                <button
+                  onClick={startLocalAnalysis}
+                  className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-xs font-semibold transition-colors"
+                >
+                  {cached ? "Load local analysis" : "Analyze locally (~1 min)"}
+                </button>
+              );
+            })()}
             {gameId && (
               <a
                 href={`https://lichess.org/${gameId}`}
@@ -1622,8 +1633,6 @@ export default function App() {
       setScreen("import");
     }
   };
-
-  const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   const runAnalysis = async (game, pgn, key, t, id, force = false) => {
     const cacheKey = `chess-analysis-${id}-${t}`;
