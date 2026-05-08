@@ -1017,9 +1017,14 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
             <input type="checkbox" checked={forceReanalyze} onChange={(e) => setForceReanalyze(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-500" />
             <span className="text-xs text-zinc-500">Re-analyze (overwrite saved)</span>
           </label>
-          <button onClick={onDemo} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline underline-offset-2">
-            try the Opera Game
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={onDemo} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline underline-offset-2">
+              try the Opera Game
+            </button>
+            <a href="https://github.com/n0nick/kibitz" target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-700 hover:text-zinc-500 transition-colors">
+              GitHub
+            </a>
+          </div>
         </div>
 
         {/* Settings */}
