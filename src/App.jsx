@@ -813,6 +813,18 @@ function gameSource(id) {
   return "lichess";
 }
 
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem("kibitz-history") ?? "[]"); } catch { return []; }
+}
+
+function addToHistory({ id, source, white, black, result }) {
+  try {
+    const prev = getHistory().filter((h) => h.id !== id);
+    prev.unshift({ id, source, white, black, result, reviewedAt: Date.now() });
+    localStorage.setItem("kibitz-history", JSON.stringify(prev.slice(0, 30)));
+  } catch {}
+}
+
 function pgnGameId(pgn) {
   const m = pgn.match(/\[Site\s+"https?:\/\/(?:www\.)?lichess\.org\/([a-zA-Z0-9]{8})(?:[/?#][^"]*)?"]/);
   if (m) return m[1];
@@ -877,6 +889,7 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
   const [games, setGames] = useState(null);
   const [gamesStale, setGamesStale] = useState(false);
   const [gamesError, setGamesError] = useState(null);
+  const [history] = useState(() => getHistory());
 
   useEffect(() => {
     if (!lichessUser) { setGames(null); setGamesStale(false); return; }
@@ -1035,6 +1048,46 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
             ) : null}
           </div>
         )}
+
+        {/* Previously reviewed */}
+        {(() => {
+          const lichessIds = new Set(Array.isArray(games) ? games.map((g) => g.id) : []);
+          const filtered = history.filter((h) => !lichessIds.has(h.id));
+          if (!filtered.length) return null;
+          return (
+            <div className="space-y-2">
+              <label className="text-xs text-zinc-500 uppercase tracking-widest">Previously reviewed</label>
+              <div className="rounded-xl border border-zinc-800 overflow-hidden divide-y divide-zinc-800/60 max-h-56 overflow-y-auto">
+                {filtered.map((h) => {
+                  const isLoading = loadingId === h.id;
+                  return (
+                    <a
+                      key={h.id}
+                      href={`?game=${h.id}`}
+                      onClick={loading ? undefined : spaClick(() => {
+                        setError(null);
+                        if (gameSource(h.id) === "pgn") {
+                          const pgn = getCachedPgn(h.id);
+                          if (pgn) { setLoading(true); setLoadingId(h.id); onImportPgn(pgn).finally(() => { setLoading(false); setLoadingId(null); }); }
+                        } else {
+                          handleListLoad(h.id);
+                        }
+                      })}
+                      className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors ${isLoading ? "bg-indigo-600/10" : "hover:bg-zinc-800/60"} ${loading ? "opacity-60 pointer-events-none" : ""}`}
+                    >
+                      <span className={`shrink-0 text-[8px] ${h.source === "lichess" ? "text-emerald-400" : "text-indigo-400"}`}>●</span>
+                      <span className="flex-1 min-w-0 truncate text-zinc-200 font-medium">
+                        {h.white} vs {h.black}
+                      </span>
+                      <span className="text-zinc-500 text-xs shrink-0">{h.result}</span>
+                      <span className="text-zinc-700 text-[10px] shrink-0">{timeAgo(h.reviewedAt)}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* URL / PGN input */}
         <div className="space-y-2">
@@ -1700,6 +1753,7 @@ export default function App() {
         setCachedPgn(id, pgn);
       }
       const parsed = parseGame(pgn);
+      addToHistory({ id, source: "lichess", white: parsed.summary.white, black: parsed.summary.black, result: parsed.summary.result });
       if (!parsed.hasEvals) {
         setGameData(parsed);
         setGameId(id);
@@ -1724,6 +1778,7 @@ export default function App() {
       const parsed = parseGame(pgn);
       const id = pgnGameId(pgn);
       setCachedPgn(id, pgn);
+      addToHistory({ id, source: "pgn", white: parsed.summary.white, black: parsed.summary.black, result: parsed.summary.result });
       setGameData(parsed);
       setGameId(id);
       setScreen("review");
