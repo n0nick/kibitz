@@ -4,7 +4,7 @@ let worker = null;
 let engineReady = false;
 let pendingResolve = null;
 let pendingReject = null;
-let currentBest = null;
+let currentBests = {};
 
 function getWorker() {
   if (worker) return worker;
@@ -17,8 +17,10 @@ function getWorker() {
       const mate  = data.match(/score mate (-?\d+)/);
       const pv    = data.match(/ pv ([\w ]+)/);
       const depth = data.match(/\bdepth (\d+)/);
+      const mpv   = data.match(/\bmultipv (\d+)/);
+      const idx   = mpv ? parseInt(mpv[1]) : 1;
       if (pv) {
-        currentBest = {
+        currentBests[idx] = {
           score: score ? parseInt(score[1]) / 100 : null,
           mate:  mate  ? parseInt(mate[1])         : null,
           pvUci: pv[1].trim().split(" "),
@@ -30,8 +32,8 @@ function getWorker() {
       const resolve = pendingResolve;
       pendingResolve = null;
       pendingReject  = null;
-      resolve(currentBest);
-      currentBest = null;
+      resolve({ ...currentBests });
+      currentBests = {};
     }
   };
   worker.onerror = (e) => {
@@ -59,7 +61,7 @@ function uciToSan(fen, uciMoves) {
   }
 }
 
-export function analyzePosition(fen, depth = 15) {
+export function analyzePosition(fen, depth = 12, numPv = 3) {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (pendingResolve) {
@@ -67,14 +69,21 @@ export function analyzePosition(fen, depth = 15) {
       pendingResolve = null;
       pendingReject  = null;
     }
-    currentBest = null;
+    currentBests = {};
     pendingResolve = (raw) => {
-      if (!raw) { resolve(null); return; }
-      resolve({ ...raw, pv: uciToSan(fen, raw.pvUci ?? []) });
+      const lines = Object.keys(raw)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => {
+          const r = raw[k];
+          return r ? { ...r, pv: uciToSan(fen, r.pvUci ?? []) } : null;
+        })
+        .filter(Boolean);
+      resolve(lines.length > 0 ? lines : null);
     };
     pendingReject = reject;
 
     const go = () => {
+      w.postMessage(`setoption name MultiPV value ${numPv}`);
       w.postMessage(`position fen ${fen}`);
       w.postMessage(`go depth ${depth}`);
     };
@@ -88,12 +97,14 @@ export function analyzePosition(fen, depth = 15) {
   });
 }
 
-export function engineLineText(result) {
-  if (!result) return null;
-  const { score, mate, pv, depth } = result;
-  const evalStr = mate != null
-    ? `Mate in ${Math.abs(mate)} for ${mate > 0 ? "White" : "Black"}`
-    : `eval ${score >= 0 ? "+" : ""}${score?.toFixed(1)} (White perspective)`;
-  const line = pv?.slice(0, 6).join(" ");
-  return `Engine (depth ${depth}): ${evalStr} — best line: ${line}`;
+export function engineLineText(lines) {
+  if (!lines || lines.length === 0) return null;
+  const depth = lines[0]?.depth;
+  const fmtEval = (r) => r.mate != null
+    ? `Mate in ${Math.abs(r.mate)} for ${r.mate > 0 ? "White" : "Black"}`
+    : `${r.score >= 0 ? "+" : ""}${r.score?.toFixed(1)}`;
+  const formatted = lines
+    .map((r, i) => `  ${i + 1}. ${r.pv?.slice(0, 5).join(" ")} (${fmtEval(r)})`)
+    .join("\n");
+  return `Engine top lines (depth ${depth}):\n${formatted}`;
 }

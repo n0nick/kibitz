@@ -589,8 +589,15 @@ function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
       [moment.id]: [...(prev[moment.id] || []), { role: "user", text: q }],
     }));
     try {
-      const fen = fenAfter ?? fenBefore;
-      const engineLine = fen ? engineLineText(await analyzePosition(fen).catch(() => null)) : null;
+      const fenCurrent = fenAfter ?? fenBefore;
+      const afterLines = fenCurrent ? await analyzePosition(fenCurrent).catch(() => null) : null;
+      const beforeLines = (fenBefore && fenBefore !== fenCurrent)
+        ? await analyzePosition(fenBefore).catch(() => null)
+        : null;
+      const engineLine = [
+        afterLines ? `Current position:\n${engineLineText(afterLines)}` : null,
+        beforeLines ? `Before this move (best alternatives):\n${engineLineText(beforeLines)}` : null,
+      ].filter(Boolean).join("\n\n") || null;
       const answer = apiKey
         ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone, fen, engineLine }, apiKey)
         : "Add an Anthropic API key on the import screen to enable AI chat.";
