@@ -1,9 +1,5 @@
 # Chess Reviewer — TODO
 
-## High priority
-
-- **Stockfish full-game analysis** — use WASM engine to generate evals for games without Lichess computer analysis (replaces the `awaiting-evals` blocking state entirely)
-
 ## Medium priority
 
 - **PGN paste / file upload** — third import mode alongside URL and games list; needed for offline/private games
