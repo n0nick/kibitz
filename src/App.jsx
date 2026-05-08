@@ -927,8 +927,9 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
     }
   };
 
-  const isPgn = url.trim().length > 0 && !url.includes('://');
-  const urlGameId = !isPgn ? parseLichessUrl(url) : null;
+  const isUrl = /^https?:\/\//.test(url.trim());
+  const isPgn = !isUrl && url.trim().length > 0;
+  const urlGameId = isUrl ? parseLichessUrl(url) : null;
   const canLoad = isPgn || urlGameId !== null;
 
   const handleListLoad = async (id) => {
