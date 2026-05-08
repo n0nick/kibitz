@@ -82,10 +82,10 @@ const DEMO_MOMENTS = [
     player: "black",
     classification: "inaccuracy",
     explanation:
-      "Black advances the b-pawn to challenge White's bishop, but this loosens the queenside pawn structure at precisely the wrong moment — before castling is complete. The pawn push invites the knight leap that follows and opens lines toward the uncastled king.",
+      "Black advances the b-pawn to [[b5]] to challenge White's bishop on [[Bc4|c4]], but this loosens the queenside pawn structure at precisely the wrong moment — before castling is complete. The pawn push invites the knight leap that follows and opens lines toward the uncastled king on [[e8]].",
     betterMoves: [
-      { move: "Nbd7", reason: "Develops the knight toward the center without weakening the queenside." },
-      { move: "Be7", reason: "Quiet development that prepares castling and keeps the structure sound." },
+      { move: "Nbd7", reason: "Develops the knight to [[d7]] toward the center without weakening the queenside." },
+      { move: "Be7", reason: "Quiet development to [[e7]] that prepares castling and keeps the structure sound." },
     ],
     qa: {
       question: "Why is the queenside pawn push risky here?",
@@ -101,7 +101,7 @@ const DEMO_MOMENTS = [
     player: "white",
     classification: "brilliant",
     explanation:
-      "Morphy sacrifices a knight to demolish Black's queenside pawn cover. The c6 pawn is forced to recapture, opening the b-file and creating a pin that Black cannot survive. Material is irrelevant here — Morphy's overwhelming development advantage makes the sacrifice practically mandatory for any advantage-seeking player.",
+      "Morphy sacrifices a knight with [[Nxb5|c3-b5]] to demolish Black's queenside pawn cover. The [[c6]] pawn is forced to recapture, opening the b-file and creating a pin that Black cannot survive. Material is irrelevant here — Morphy's overwhelming development advantage makes the sacrifice practically mandatory for any advantage-seeking player.",
     betterMoves: [],
     qa: {
       question: "Why not just play Bxb5 immediately instead of sacrificing a piece?",
@@ -117,7 +117,7 @@ const DEMO_MOMENTS = [
     player: "black",
     classification: "mistake",
     explanation:
-      "Black is forced to capture, but recapturing with the pawn opens the b-file directly toward the uncastled king. There was no satisfactory alternative — declining leaves a powerful knight anchored on b5, and taking with the queen drops c6 anyway.",
+      "Black is forced to capture on [[b5]], but recapturing with the pawn opens the b-file directly toward the uncastled king on [[e8]]. There was no satisfactory alternative — declining leaves a powerful knight anchored on [[b5]], and taking with the queen drops [[c6]] anyway.",
     betterMoves: [
       { move: "Qd8", reason: "Passive, but avoids weakening the pawn structure — at the cost of losing two tempos." },
     ],
@@ -135,7 +135,7 @@ const DEMO_MOMENTS = [
     player: "white",
     classification: "good",
     explanation:
-      "The bishop recaptures with check, forcing Black's knight to interpose on d7. This blocks the queen's defense of the d-file and creates immediate coordination problems. The d7 knight is now badly placed — it will soon become the target of a discovered attack.",
+      "The bishop recaptures with [[Bxb5+|c4-b5]], forcing Black's knight to interpose on [[d7]]. This blocks the queen's defense of the d-file and creates immediate coordination problems. The [[Nd7|d7]] knight is now badly placed — it will soon become the target of a discovered attack.",
     betterMoves: [],
     qa: {
       question: "What does the check accomplish beyond recovering material?",
@@ -151,7 +151,7 @@ const DEMO_MOMENTS = [
     player: "white",
     classification: "brilliant",
     explanation:
-      "Morphy castles queenside, connecting his rooks directly to the d-file — the most critical open line in the position. The rook immediately eyes d7, where Black's pieces are completely tangled. This move also removes the king from the center with tempo, while simultaneously loading the most powerful gun in chess: a rook on an open file.",
+      "Morphy castles queenside, placing the rook immediately on [[d1]] — the most critical open line in the position. The rook now eyes [[d7]], where Black's pieces are completely tangled. This move also removes the king from the center with tempo, while simultaneously loading the most powerful gun in chess: a rook on an open file.",
     betterMoves: [],
     qa: {
       question: "Why queenside instead of kingside castling?",
@@ -167,7 +167,7 @@ const DEMO_MOMENTS = [
     player: "white",
     classification: "brilliant",
     explanation:
-      "A second exchange sacrifice that tears apart Black's coordination entirely. The rook takes the knight on d7, and after the forced recapture, White will swing the second rook to d1 to maintain absolute control of the file. Morphy has given up a rook for a knight but gained an initiative that cannot be stopped.",
+      "A second exchange sacrifice that tears apart Black's coordination entirely. The rook sweeps in with [[Rxd7|d1-d7]], and after the forced recapture White swings the second rook to [[d1]] to maintain absolute control of the file. Morphy has given up a rook for a knight but gained an initiative that cannot be stopped.",
     betterMoves: [],
     qa: {
       question: "What happens if Black doesn't recapture on d7?",
@@ -183,7 +183,7 @@ const DEMO_MOMENTS = [
     player: "white",
     classification: "brilliant",
     explanation:
-      "One of the most famous queen sacrifices in chess history. The queen is offered on b8, and Black must accept — any other move loses material and the position. But after Nxb8, the rook delivers checkmate on d8. The geometry is perfect: the queen draws away the one piece guarding d8, completing the combination.",
+      "One of the most famous queen sacrifices in chess history. The queen lands on [[Qb8+|b3-b8]] and Black must accept — any other move loses immediately. But after Nxb8, the rook delivers checkmate on [[d8]]. The geometry is perfect: the queen draws away the one piece guarding [[d8]], completing the combination.",
     betterMoves: [],
     qa: {
       question: "Could Black decline the queen sacrifice?",
@@ -199,7 +199,7 @@ const DEMO_MOMENTS = [
     player: "white",
     classification: "good",
     explanation:
-      "Checkmate. The rook delivers the final blow on d8, completing a combination that began six moves earlier with a knight sacrifice. The black king has no escape — the bishop on g5 controls f6, and the queen on e6 is pinned by the incoming rook. A perfectly executed miniature, played over the board in an opera box in 1858.",
+      "Checkmate. The rook delivers the final blow with [[Rd8#|d1-d8]], completing a combination that began six moves earlier. The black king on [[e8]] has no escape — Black's queen on [[Qe6|e6]] is pinned by the incoming rook and cannot interpose. A perfectly executed miniature, played over the board in an opera box in 1858.",
     betterMoves: [],
     qa: {
       question: "What made this game so historically famous?",
