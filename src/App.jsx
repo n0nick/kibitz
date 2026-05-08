@@ -253,7 +253,7 @@ function Board({ fen }) {
   const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"];
 
   return (
-    <div className="w-full max-w-[320px] mx-auto select-none">
+    <div className="w-full mx-auto select-none">
       <div className="flex items-stretch">
         <div className="flex flex-col mr-1" style={{ width: 12 }}>
           {ranks.map((r) => (
@@ -604,6 +604,8 @@ export default function App() {
   const [expandedAlt, setExpandedAlt] = useState(null);
   const touchStartX = useRef(null);
   const scrollRef = useRef(null);
+  const leftPanelRef = useRef(null);
+  const rightPanelRef = useRef(null);
 
   const currentMoment = MOMENT_BY_MOVE_IDX[moveIdx] ?? null;
   const currentPos = POSITIONS[moveIdx];
@@ -622,7 +624,9 @@ export default function App() {
   const jumpTo = (idx) => {
     setMoveIdx(idx);
     setExpandedAlt(null);
-    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    for (const ref of [scrollRef, leftPanelRef, rightPanelRef]) {
+      ref.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const goKeyMoment = (dir) => {
@@ -660,8 +664,137 @@ export default function App() {
     : `${moveIdx} / ${POSITIONS.length - 1}`;
   const counterSub = currentMoment ? "key moments" : "all moves";
 
+  const commentarySection = currentMoment ? (
+    <div className="mx-4 mb-4 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
+      <div className="px-4 pt-4 pb-3.5 border-b border-zinc-800/60">
+        <div className="flex items-center gap-3 flex-wrap mb-3">
+          <span className="text-xl font-bold tracking-tight text-zinc-100 font-mono">
+            {currentMoment.moveNumber} {currentMoment.notation}
+          </span>
+          <Chip classification={currentMoment.classification} />
+        </div>
+        <EvalBar before={EVALS[currentMoment.moveIdx - 1] ?? 0} after={EVALS[currentMoment.moveIdx]} />
+      </div>
+      <div className="px-4 py-4">
+        <p className="text-sm text-zinc-300 leading-[1.75]">{currentMoment.explanation}</p>
+      </div>
+      {currentMoment.betterMoves.length > 0 && (
+        <div className="px-4 pb-4 border-t border-zinc-800/60 pt-3.5">
+          <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Better alternatives</div>
+          <div className="flex flex-wrap gap-2">
+            {currentMoment.betterMoves.map((alt, i) => (
+              <div key={i} className="flex-1 min-w-[110px]">
+                <button
+                  onClick={() => setExpandedAlt(expandedAlt === i ? null : i)}
+                  className={`w-full text-sm px-3.5 py-2.5 rounded-xl border transition-all font-mono font-semibold ${
+                    expandedAlt === i
+                      ? "bg-zinc-700 border-zinc-600 text-zinc-100"
+                      : "bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"
+                  }`}
+                >
+                  {alt.move}
+                </button>
+                {expandedAlt === i && (
+                  <p className="mt-2 text-xs text-zinc-400 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 leading-relaxed">
+                    {alt.reason}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : (
+    moveIdx > 0 && (
+      <div className="mx-4 mb-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/40 overflow-hidden">
+        <div className="px-4 pt-4 pb-3.5 border-b border-zinc-800/40">
+          <div className="mb-3">
+            <span className="font-mono text-zinc-400 text-sm font-semibold">
+              {Math.ceil(moveIdx / 2)}{moveIdx % 2 === 1 ? "." : "..."} {currentPos.san}
+            </span>
+          </div>
+          <EvalBar before={EVALS[moveIdx - 1] ?? 0} after={EVALS[moveIdx]} />
+        </div>
+        <div className="px-4 py-4">
+          {analysisCache[moveIdx] ? (
+            <p className="text-sm text-zinc-400 leading-[1.75]">{analysisCache[moveIdx]}</p>
+          ) : (
+            <button
+              onClick={() =>
+                setAnalysisCache((prev) => ({
+                  ...prev,
+                  [moveIdx]: `(LLM analysis for ${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? "." : "..."} ${currentPos.san} — in production this would include positional assessment, key threats, and coaching notes tailored to this position.)`,
+                }))
+              }
+              className="text-xs text-zinc-500 border border-zinc-700/60 rounded-xl px-4 py-2.5 hover:border-zinc-600 hover:text-zinc-300 transition-colors"
+            >
+              Analyze this position
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  );
+
+  const chatSection = currentMoment && (
+    <Chat moment={currentMoment} history={chatHistory} setHistory={setChatHistory} />
+  );
+
+  const controls = (
+    <>
+      {/* Primary navigation: key moment jumps */}
+      <div className="flex items-center justify-between px-4 pt-2 pb-1 gap-2">
+        <button
+          onClick={() => goKeyMoment(-1)}
+          disabled={prevKeyMoment === undefined}
+          className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
+          aria-label="Previous key moment"
+        >
+          ←
+        </button>
+        <div className="text-center flex-1">
+          <div className="text-sm">
+            <span className={`font-semibold tabular-nums ${currentMoment ? "text-zinc-100" : "text-zinc-500"}`}>
+              {counterLabel}
+            </span>
+          </div>
+          <div className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5">{counterSub}</div>
+        </div>
+        <button
+          onClick={() => goKeyMoment(1)}
+          disabled={nextKeyMoment === undefined}
+          className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
+          aria-label="Next key moment"
+        >
+          →
+        </button>
+      </div>
+
+      {/* Secondary navigation: single-move steps */}
+      <div className="flex items-center justify-center gap-6 pb-3">
+        <button
+          onClick={() => stepMove(-1)}
+          disabled={moveIdx === 0}
+          className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
+          aria-label="Previous move"
+        >
+          ‹ prev move
+        </button>
+        <button
+          onClick={() => stepMove(1)}
+          disabled={moveIdx === POSITIONS.length - 1}
+          className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
+          aria-label="Next move"
+        >
+          next move ›
+        </button>
+      </div>
+    </>
+  );
+
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col max-w-md mx-auto overflow-hidden">
+    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
       {/* Header */}
       <button
         className="flex items-center justify-between px-4 py-3.5 bg-zinc-900/90 backdrop-blur border-b border-zinc-800 text-left shrink-0 hover:bg-zinc-900 active:bg-zinc-800 transition-colors"
@@ -682,149 +815,40 @@ export default function App() {
         </div>
       </button>
 
-      {/* Scrollable body */}
+      {/* Body — single scroll on mobile, two columns on desktop */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto md:overflow-hidden md:flex"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        {/* Board */}
-        <div className="px-4 pt-5 pb-3">
-          <Board fen={currentPos.fen} />
-        </div>
-
-        {/* Move timeline */}
-        <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
-
-        {/* Primary navigation: key moment jumps */}
-        <div className="flex items-center justify-between px-4 pt-2 pb-1 gap-2">
-          <button
-            onClick={() => goKeyMoment(-1)}
-            disabled={prevKeyMoment === undefined}
-            className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
-            aria-label="Previous key moment"
-          >
-            ←
-          </button>
-
-          <div className="text-center flex-1">
-            <div className="text-sm">
-              <span className={`font-semibold tabular-nums ${currentMoment ? "text-zinc-100" : "text-zinc-500"}`}>
-                {counterLabel}
-              </span>
-            </div>
-            <div className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5">{counterSub}</div>
+        {/* Left panel: board + timeline + controls (+ commentary on mobile) */}
+        <div
+          ref={leftPanelRef}
+          className="shrink-0 md:w-[420px] md:overflow-y-auto md:border-r md:border-zinc-800"
+        >
+          <div className="px-4 pt-5 pb-3">
+            <Board fen={currentPos.fen} />
           </div>
-
-          <button
-            onClick={() => goKeyMoment(1)}
-            disabled={nextKeyMoment === undefined}
-            className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
-            aria-label="Next key moment"
-          >
-            →
-          </button>
-        </div>
-
-        {/* Secondary navigation: single-move steps */}
-        <div className="flex items-center justify-center gap-6 pb-2">
-          <button
-            onClick={() => stepMove(-1)}
-            disabled={moveIdx === 0}
-            className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
-            aria-label="Previous move"
-          >
-            ‹ prev move
-          </button>
-          <button
-            onClick={() => stepMove(1)}
-            disabled={moveIdx === POSITIONS.length - 1}
-            className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
-            aria-label="Next move"
-          >
-            next move ›
-          </button>
-        </div>
-
-        {/* Commentary card */}
-        {currentMoment ? (
-          <div className="mx-4 mb-4 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
-            <div className="px-4 pt-4 pb-3.5 border-b border-zinc-800/60">
-              <div className="flex items-center gap-3 flex-wrap mb-3">
-                <span className="text-xl font-bold tracking-tight text-zinc-100 font-mono">
-                  {currentMoment.moveNumber} {currentMoment.notation}
-                </span>
-                <Chip classification={currentMoment.classification} />
-              </div>
-              <EvalBar before={EVALS[currentMoment.moveIdx - 1] ?? 0} after={EVALS[currentMoment.moveIdx]} />
-            </div>
-            <div className="px-4 py-4">
-              <p className="text-sm text-zinc-300 leading-[1.75]">{currentMoment.explanation}</p>
-            </div>
-            {currentMoment.betterMoves.length > 0 && (
-              <div className="px-4 pb-4 border-t border-zinc-800/60 pt-3.5">
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Better alternatives</div>
-                <div className="flex flex-wrap gap-2">
-                  {currentMoment.betterMoves.map((alt, i) => (
-                    <div key={i} className="flex-1 min-w-[110px]">
-                      <button
-                        onClick={() => setExpandedAlt(expandedAlt === i ? null : i)}
-                        className={`w-full text-sm px-3.5 py-2.5 rounded-xl border transition-all font-mono font-semibold ${
-                          expandedAlt === i
-                            ? "bg-zinc-700 border-zinc-600 text-zinc-100"
-                            : "bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"
-                        }`}
-                      >
-                        {alt.move}
-                      </button>
-                      {expandedAlt === i && (
-                        <p className="mt-2 text-xs text-zinc-400 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 leading-relaxed">
-                          {alt.reason}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+          <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
+          {controls}
+          {/* Commentary + chat inline on mobile only */}
+          <div className="md:hidden">
+            {commentarySection}
+            {chatSection}
           </div>
-        ) : (
-          moveIdx > 0 && (
-            <div className="mx-4 mb-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/40 overflow-hidden">
-              <div className="px-4 pt-4 pb-3.5 border-b border-zinc-800/40">
-                <div className="mb-3">
-                  <span className="font-mono text-zinc-400 text-sm font-semibold">
-                    {Math.ceil(moveIdx / 2)}{moveIdx % 2 === 1 ? "." : "..."} {currentPos.san}
-                  </span>
-                </div>
-                <EvalBar before={EVALS[moveIdx - 1] ?? 0} after={EVALS[moveIdx]} />
-              </div>
-              <div className="px-4 py-4">
-                {analysisCache[moveIdx] ? (
-                  <p className="text-sm text-zinc-400 leading-[1.75]">{analysisCache[moveIdx]}</p>
-                ) : (
-                  <button
-                    onClick={() =>
-                      setAnalysisCache((prev) => ({
-                        ...prev,
-                        [moveIdx]: `(LLM analysis for ${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? "." : "..."} ${currentPos.san} — in production this would include positional assessment, key threats, and coaching notes tailored to this position.)`,
-                      }))
-                    }
-                    className="text-xs text-zinc-500 border border-zinc-700/60 rounded-xl px-4 py-2.5 hover:border-zinc-600 hover:text-zinc-300 transition-colors"
-                  >
-                    Analyze this position
-                  </button>
-                )}
-              </div>
-            </div>
-          )
-        )}
+        </div>
 
-        {/* Chat — key moments only */}
-        {currentMoment && (
-          <Chat moment={currentMoment} history={chatHistory} setHistory={setChatHistory} />
-        )}
+        {/* Right panel: commentary + chat on desktop only */}
+        <div
+          ref={rightPanelRef}
+          className="hidden md:flex md:flex-col md:flex-1 md:overflow-y-auto"
+        >
+          <div className="flex-1 py-6 max-w-2xl w-full mx-auto">
+            {commentarySection}
+            {chatSection}
+          </div>
+        </div>
       </div>
 
       {/* Summary overlay */}
