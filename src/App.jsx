@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame, sanToSquares } from "./parseGame";
 import { analyzeGame, analyzeSinglePosition, chatAboutPosition, TONES } from "./analyzeGame";
+import { fetchLichessAccount, fetchLichessRecentGames, requestLichessAnalysis } from "./lichess";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
 
@@ -790,47 +791,152 @@ function useTone() {
   return [tone, setTone];
 }
 
+function useLichess() {
+  const [token, setTokenState] = useState(() => localStorage.getItem("chess-lichess-token") ?? "");
+  const [username, setUsernameState] = useState(() => localStorage.getItem("chess-lichess-username") ?? "");
+  const setLichess = (tok, uname) => {
+    const t = (tok ?? "").trim();
+    if (t) localStorage.setItem("chess-lichess-token", t);
+    else { localStorage.removeItem("chess-lichess-token"); localStorage.removeItem("chess-lichess-username"); }
+    setTokenState(t);
+    if (!t) { setUsernameState(""); return; }
+    if (uname !== undefined) {
+      if (uname) localStorage.setItem("chess-lichess-username", uname);
+      else localStorage.removeItem("chess-lichess-username");
+      setUsernameState(uname ?? "");
+    }
+  };
+  return [token, username, setLichess];
+}
+
 // ─── Import screen ────────────────────────────────────────────────────────────
 
-function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, tone, setTone }) {
+function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, tone, setTone, lichessToken, lichessUser, setLichess }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forceReanalyze, setForceReanalyze] = useState(false);
   const [keyDraft, setKeyDraft] = useState(apiKey);
   const [keyVisible, setKeyVisible] = useState(false);
-  const [forceReanalyze, setForceReanalyze] = useState(false);
+  const [lichessDraft, setLichessDraft] = useState(lichessToken);
+  const [lichessVisible, setLichessVisible] = useState(false);
+  const [lichessError, setLichessError] = useState(null);
+  const [games, setGames] = useState(null);
+  const [gamesError, setGamesError] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
 
-  const saveKey = () => setApiKey(keyDraft);
+  useEffect(() => {
+    if (!lichessUser) { setGames(null); return; }
+    setGames("loading");
+    setGamesError(null);
+    fetchLichessRecentGames(lichessUser, lichessToken)
+      .then(setGames)
+      .catch((e) => { setGamesError(e.message); setGames(null); });
+  }, [lichessUser]);
 
-  const handleImport = async () => {
-    const gameId = parseLichessUrl(url);
-    if (!gameId) {
-      setError({ message: "Paste a Lichess game URL (e.g. lichess.org/abc12345)" });
-      return;
+  const saveApiKey = () => setApiKey(keyDraft);
+  const saveLichessToken = async () => {
+    const t = lichessDraft.trim();
+    if (!t) { setLichess(""); setLichessError(null); return; }
+    setLichessError(null);
+    try {
+      const account = await fetchLichessAccount(t);
+      setLichess(t, account.username);
+    } catch {
+      setLichessError("Invalid token or connection failed.");
     }
+  };
+
+  const urlGameId = parseLichessUrl(url);
+  const selectedListGame = Array.isArray(games) ? games.find((g) => g.id === selectedId) : null;
+  const gameIdToLoad = selectedId ?? urlGameId;
+  const needsEvals = selectedListGame && !selectedListGame.hasEvals;
+
+  const handleLoad = async () => {
+    if (!gameIdToLoad) { setError({ message: "Select a game or paste a Lichess URL." }); return; }
     setLoading(true);
-    await onImport(gameId, forceReanalyze);
+    await onImport(gameIdToLoad, forceReanalyze);
     setLoading(false);
     setForceReanalyze(false);
   };
 
+  const timeAgo = (ms) => {
+    const s = Math.floor((Date.now() - ms) / 1000);
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md space-y-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Chess Reviewer</h1>
-          <p className="text-zinc-500 text-sm mt-1">Paste a Lichess game URL to get started</p>
+          <p className="text-zinc-500 text-sm mt-1">
+            {lichessUser ? `Connected as ${lichessUser}` : "Analyze your chess games with AI"}
+          </p>
         </div>
 
-        {/* Game URL */}
-        <div className="space-y-3">
+        {/* My games */}
+        {lichessUser && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-zinc-500 uppercase tracking-widest">My recent games</label>
+              <button
+                onClick={() => {
+                  setGames("loading");
+                  fetchLichessRecentGames(lichessUser, lichessToken)
+                    .then(setGames)
+                    .catch((e) => { setGamesError(e.message); setGames(null); });
+                }}
+                className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+              >
+                refresh
+              </button>
+            </div>
+            {games === "loading" ? (
+              <p className="text-xs text-zinc-600 animate-pulse py-2">Loading games…</p>
+            ) : gamesError ? (
+              <p className="text-xs text-red-500/70">{gamesError}</p>
+            ) : Array.isArray(games) && games.length > 0 ? (
+              <div className="rounded-xl border border-zinc-800 overflow-hidden divide-y divide-zinc-800/60 max-h-56 overflow-y-auto">
+                {games.map((g) => {
+                  const opp = g.white.toLowerCase() === lichessUser.toLowerCase() ? g.black : g.white;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => { setSelectedId(g.id === selectedId ? null : g.id); setUrl(""); setError(null); }}
+                      className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors ${
+                        selectedId === g.id ? "bg-indigo-600/20 border-l-2 border-l-indigo-500" : "hover:bg-zinc-800/60"
+                      }`}
+                    >
+                      <span className={`shrink-0 text-[8px] ${g.hasEvals ? "text-emerald-400" : "text-amber-400"}`}>●</span>
+                      <span className="flex-1 min-w-0 truncate">
+                        <span className="text-zinc-200 font-medium">vs {opp}</span>
+                        {g.opening && <span className="text-zinc-500 text-xs ml-2">{g.opening.split(":")[0]}</span>}
+                      </span>
+                      <span className="text-zinc-500 text-xs shrink-0">{g.result}</span>
+                      <span className="text-zinc-700 text-[10px] shrink-0">{timeAgo(g.playedAt)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : Array.isArray(games) ? (
+              <p className="text-xs text-zinc-600 py-2">No recent games found.</p>
+            ) : null}
+          </div>
+        )}
+
+        {/* URL */}
+        <div className="space-y-2">
+          {lichessUser && <p className="text-xs text-zinc-600 text-center">— or paste a URL —</p>}
           <input
             type="url"
             value={url}
-            onChange={(e) => { setUrl(e.target.value); setError(null); }}
-            onKeyDown={(e) => e.key === "Enter" && handleImport()}
+            onChange={(e) => { setUrl(e.target.value); setSelectedId(null); setError(null); }}
+            onKeyDown={(e) => e.key === "Enter" && handleLoad()}
             placeholder="https://lichess.org/abc12345"
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
-            autoFocus
+            autoFocus={!lichessUser}
           />
           {error && (
             <p className="text-sm text-red-400">
@@ -840,62 +946,6 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
               )}
             </p>
           )}
-          <button
-            onClick={handleImport}
-            disabled={loading || !url.trim()}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 rounded-xl text-sm font-semibold transition-colors"
-          >
-            {loading ? "Loading…" : "Import game"}
-          </button>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={forceReanalyze}
-              onChange={(e) => setForceReanalyze(e.target.checked)}
-              className="w-3.5 h-3.5 accent-indigo-500"
-            />
-            <span className="text-xs text-zinc-500">Re-analyze (overwrite saved analysis)</span>
-          </label>
-        </div>
-
-        <div className="text-center">
-          <button
-            onClick={onDemo}
-            className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2"
-          >
-            Or try the Opera Game (demo)
-          </button>
-        </div>
-
-        {/* API key */}
-        <div className="border-t border-zinc-800 pt-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs text-zinc-500 uppercase tracking-widest">Anthropic API key</label>
-            {apiKey && (
-              <span className="text-[10px] text-emerald-500">saved</span>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type={keyVisible ? "text" : "password"}
-              value={keyDraft}
-              onChange={(e) => setKeyDraft(e.target.value)}
-              onBlur={saveKey}
-              onKeyDown={(e) => e.key === "Enter" && saveKey()}
-              placeholder="sk-ant-…"
-              className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
-            />
-            <button
-              onClick={() => setKeyVisible((v) => !v)}
-              className="px-3 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs"
-              aria-label={keyVisible ? "Hide key" : "Show key"}
-            >
-              {keyVisible ? "hide" : "show"}
-            </button>
-          </div>
-          <p className="text-xs text-zinc-600">
-            Used for AI analysis. Stored in your browser only — never sent anywhere except Anthropic.
-          </p>
         </div>
 
         {/* Tone */}
@@ -907,9 +957,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
                 key={t.value}
                 onClick={() => setTone(t.value)}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-                  tone === t.value
-                    ? "bg-zinc-700 border-zinc-500 text-zinc-100"
-                    : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+                  tone === t.value ? "bg-zinc-700 border-zinc-500 text-zinc-100" : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
                 }`}
               >
                 {t.label}
@@ -918,10 +966,76 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
           </div>
         </div>
 
-        <p className="text-xs text-zinc-600 text-center leading-relaxed">
-          Only games with computer analysis are supported. To add analysis, open the game on Lichess and click
-          "Request a computer analysis".
-        </p>
+        {/* Load */}
+        <div className="space-y-2">
+          <button
+            onClick={handleLoad}
+            disabled={loading || !gameIdToLoad}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 rounded-xl text-sm font-semibold transition-colors"
+          >
+            {loading ? "Loading…" : needsEvals ? "Load & request analysis" : "Load game"}
+          </button>
+          {needsEvals && !loading && (
+            <p className="text-xs text-zinc-600 text-center">No Lichess analysis yet — will be requested automatically.</p>
+          )}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={forceReanalyze} onChange={(e) => setForceReanalyze(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-500" />
+            <span className="text-xs text-zinc-500">Re-analyze (overwrite saved analysis)</span>
+          </label>
+        </div>
+
+        <div className="text-center">
+          <button onClick={onDemo} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2">
+            Or try the Opera Game (demo)
+          </button>
+        </div>
+
+        {/* Settings */}
+        <div className="border-t border-zinc-800 pt-5 space-y-4">
+          <div className="text-xs text-zinc-500 uppercase tracking-widest">Settings</div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-zinc-600">Anthropic API key</label>
+              {apiKey && <span className="text-[10px] text-emerald-500">saved</span>}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type={keyVisible ? "text" : "password"}
+                value={keyDraft}
+                onChange={(e) => setKeyDraft(e.target.value)}
+                onBlur={saveApiKey}
+                onKeyDown={(e) => e.key === "Enter" && saveApiKey()}
+                placeholder="sk-ant-…"
+                className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
+              />
+              <button onClick={() => setKeyVisible((v) => !v)} className="px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs">
+                {keyVisible ? "hide" : "show"}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-zinc-600">Lichess personal token</label>
+              {lichessUser && <span className="text-[10px] text-emerald-500">{lichessUser}</span>}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type={lichessVisible ? "text" : "password"}
+                value={lichessDraft}
+                onChange={(e) => setLichessDraft(e.target.value)}
+                onBlur={saveLichessToken}
+                onKeyDown={(e) => e.key === "Enter" && saveLichessToken()}
+                placeholder="lip_…"
+                className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
+              />
+              <button onClick={() => setLichessVisible((v) => !v)} className="px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs">
+                {lichessVisible ? "hide" : "show"}
+              </button>
+            </div>
+            {lichessError && <p className="text-xs text-red-400">{lichessError}</p>}
+            <p className="text-xs text-zinc-600">Create at lichess.org/account/oauth/token — no scopes needed.</p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1019,7 +1133,12 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
   const counterLabel = moveIdx === 0 ? "Start" : `${moveIdx} / ${positions.length - 1}`;
   const counterSub = currentMoment ? "key moment" : "move";
 
-  const commentarySection = currentMoment ? (
+  const commentarySection = analysisStatus === "awaiting-evals" ? (
+    <div className="mx-4 mb-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/40 px-4 py-5">
+      <p className="text-sm text-zinc-400 animate-pulse">Waiting for Lichess computer analysis…</p>
+      <p className="text-xs text-zinc-600 mt-1.5">Usually takes 30–60 seconds. Board will update automatically.</p>
+    </div>
+  ) : currentMoment ? (
     <div className="mx-4 mb-4 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
       <div className="px-4 pt-4 pb-3.5 border-b border-zinc-800/60">
         <div className="flex items-center gap-3 flex-wrap mb-3">
@@ -1312,11 +1431,13 @@ function GameReview({ game, gameId, onReset, apiKey, tone, onPatchMoment, analys
 export default function App() {
   const [apiKey, setApiKey] = useApiKey();
   const [tone, setTone] = useTone();
+  const [lichessToken, lichessUser, setLichess] = useLichess();
   const [screen, setScreen] = useState("import");
   const [gameData, setGameData] = useState(null);
   const [gameId, setGameId] = useState(null);
   const [importError, setImportError] = useState(null);
-  const [analysisStatus, setAnalysisStatus] = useState(null); // null | 'loading' | 'done' | 'error'
+  const [analysisStatus, setAnalysisStatus] = useState(null); // null | 'awaiting-evals' | 'loading' | 'done' | 'error'
+  const pollingRef = useRef(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1331,6 +1452,23 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (analysisStatus !== "awaiting-evals" || !gameId) return;
+    pollingRef.current = setInterval(async () => {
+      try {
+        const pgn = await fetchLichessGame(gameId);
+        const parsed = parseGame(pgn);
+        if (parsed.hasEvals) {
+          clearInterval(pollingRef.current);
+          setGameData(parsed);
+          if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, gameId);
+          else setAnalysisStatus(null);
+        }
+      } catch { /* keep polling */ }
+    }, 5000);
+    return () => clearInterval(pollingRef.current);
+  }, [analysisStatus, gameId]);
+
   const doImport = async (id, force = false) => {
     setScreen("loading");
     setImportError(null);
@@ -1338,11 +1476,19 @@ export default function App() {
       const pgn = await fetchLichessGame(id);
       const parsed = parseGame(pgn);
       if (!parsed.hasEvals) {
-        setImportError({
-          message: 'This game has no computer analysis. Request it on Lichess first.',
-          gameUrl: `https://lichess.org/${id}`,
-        });
-        setScreen("import");
+        if (lichessToken) {
+          try { await requestLichessAnalysis(id, lichessToken); } catch { /* rate-limited or already queued — poll anyway */ }
+          setGameData(parsed);
+          setGameId(id);
+          setScreen("review");
+          setAnalysisStatus("awaiting-evals");
+        } else {
+          setImportError({
+            message: 'This game has no computer analysis. Request it on Lichess first.',
+            gameUrl: `https://lichess.org/${id}`,
+          });
+          setScreen("import");
+        }
         return;
       }
       setGameData(parsed);
@@ -1412,6 +1558,9 @@ export default function App() {
       setApiKey={setApiKey}
       tone={tone}
       setTone={setTone}
+      lichessToken={lichessToken}
+      lichessUser={lichessUser}
+      setLichess={setLichess}
     />
   );
 }
