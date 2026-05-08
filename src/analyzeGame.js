@@ -38,13 +38,13 @@ async function callApi(messages, apiKey, { system, maxTokens = 1024 } = {}) {
   return data.content[0].text;
 }
 
-const ANNOTATION_RULES = `Board annotations (in explanations and reasons only):
+const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation and reason:
 - Square reference: [[e6]]
 - Piece on a square: [[Ng5|g5]]
 - Move (MUST include explicit from–to): [[Nxe6|g5-e6]]
 - NEVER use [[SAN]] without a pipe — always provide |from-to
 - Use lowercase algebraic squares (a1–h8)
-- Annotate 2–3 most important references only`;
+- Include 2–3 annotations per explanation; annotate every key square and move`;
 
 function buildPrompt(pgn, moments, summary, evals, tone) {
   const cleanPgn = pgn.replace(/\{[^}]*\}/g, "").replace(/\s+/g, " ").trim();
@@ -77,8 +77,8 @@ Return ONLY valid JSON, no markdown:
   "moments": [
     {
       "moveIdx": <number>,
-      "explanation": "2-3 sentences: what happened and why it matters",
-      "betterMoves": [{"move": "<SAN>", "reason": "<one sentence>"}],
+      "explanation": "2-3 sentences with [[square/piece/move]] annotations: what happened and why it matters",
+      "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
       "suggestedQuestion": "A specific follow-up question"
     }
   ]
