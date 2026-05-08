@@ -245,6 +245,16 @@ function mergeAnalysis(game, result) {
   };
 }
 
+// ─── SPA-safe click: prevent default only for plain left-clicks so cmd/ctrl/middle still open new tabs
+
+function spaClick(handler) {
+  return (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    handler(e);
+  };
+}
+
 // ─── Strip annotation syntax to plain text ───────────────────────────────────
 
 function stripAnnotations(text) {
@@ -437,7 +447,7 @@ function Chip({ classification, small }) {
 
 // ─── Move timeline ────────────────────────────────────────────────────────────
 
-function MoveChip({ posIdx, moveIdx, setRef, onJump }) {
+function MoveChip({ posIdx, moveIdx, gameId, setRef, onJump }) {
   const { positions, momentByMoveIdx } = useContext(GameContext);
   const pos = positions[posIdx];
   const moment = momentByMoveIdx[posIdx];
@@ -445,9 +455,10 @@ function MoveChip({ posIdx, moveIdx, setRef, onJump }) {
   const cls = moment ? CLS[moment.classification] : null;
 
   return (
-    <button
+    <a
       ref={setRef}
-      onClick={() => onJump(posIdx)}
+      href={`?game=${gameId}&move=${posIdx}`}
+      onClick={spaClick(() => onJump(posIdx))}
       className={`text-[11px] font-mono px-1.5 py-1 rounded transition-all whitespace-nowrap ${
         isActive
           ? "bg-zinc-100 text-zinc-900 font-bold"
@@ -457,11 +468,11 @@ function MoveChip({ posIdx, moveIdx, setRef, onJump }) {
       }`}
     >
       {pos.san}
-    </button>
+    </a>
   );
 }
 
-function MoveTimeline({ moveIdx, onJump }) {
+function MoveTimeline({ moveIdx, onJump, gameId }) {
   const { positions } = useContext(GameContext);
   const chipRefs = useRef({});
 
@@ -487,6 +498,7 @@ function MoveTimeline({ moveIdx, onJump }) {
             <MoveChip
               posIdx={w}
               moveIdx={moveIdx}
+              gameId={gameId}
               setRef={(el) => (chipRefs.current[w] = el)}
               onJump={onJump}
             />
@@ -494,6 +506,7 @@ function MoveTimeline({ moveIdx, onJump }) {
               <MoveChip
                 posIdx={b}
                 moveIdx={moveIdx}
+                gameId={gameId}
                 setRef={(el) => (chipRefs.current[b] = el)}
                 onJump={onJump}
               />
@@ -930,13 +943,13 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
                   const opp = g.white.toLowerCase() === lichessUser.toLowerCase() ? g.black : g.white;
                   const isLoading = loadingId === g.id;
                   return (
-                    <button
+                    <a
                       key={g.id}
-                      onClick={() => { setError(null); handleListLoad(g.id); }}
-                      disabled={loading}
+                      href={`?game=${g.id}`}
+                      onClick={loading ? undefined : spaClick(() => { setError(null); handleListLoad(g.id); })}
                       className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors ${
                         isLoading ? "bg-indigo-600/10" : "hover:bg-zinc-800/60"
-                      } disabled:opacity-60`}
+                      } ${loading ? "opacity-60 pointer-events-none" : ""}`}
                     >
                       <span className={`shrink-0 text-[8px] ${g.hasEvals ? "text-emerald-400" : "text-amber-400"}`}>●</span>
                       <span className="flex-1 min-w-0 truncate">
@@ -948,7 +961,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
                         ? <span className="text-zinc-500 text-[10px] shrink-0 animate-pulse">loading…</span>
                         : <span className="text-zinc-700 text-[10px] shrink-0">{timeAgo(g.playedAt)}</span>
                       }
-                    </button>
+                    </a>
                   );
                 })}
               </div>
@@ -1061,7 +1074,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
                   </button>
                 </div>
                 {lichessError && <p className="text-xs text-red-400">{lichessError}</p>}
-                <p className="text-xs text-zinc-600">Create at lichess.org/account/oauth/token — no scopes needed.</p>
+                <p className="text-xs text-zinc-600">Create at <a href="https://lichess.org/account/oauth/token" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-zinc-400 transition-colors">lichess.org/account/oauth/token</a> — no scopes needed.</p>
               </div>
             </div>
           )}
@@ -1322,24 +1335,26 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
     <Chat moment={chatMoment} history={chatHistory} setHistory={setChatHistory} apiKey={apiKey} tone={tone} onHover={setHoverHighlight} />
   );
 
+  const moveUrl = (idx) => `?game=${gameId}&move=${idx}`;
+  const navCls = (disabled) =>
+    `w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 transition-colors ${
+      disabled ? "opacity-20 pointer-events-none" : "hover:bg-zinc-700 active:bg-zinc-600"
+    }`;
+
   const controls = (
     <div className="flex items-center justify-between px-4 py-3 gap-1.5">
-      <button
-        onClick={() => goKeyMoment(-1)}
-        disabled={prevKeyMoment === undefined}
-        className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 active:bg-zinc-600 transition-colors text-base font-bold"
+      <a
+        href={prevKeyMoment !== undefined ? moveUrl(prevKeyMoment) : undefined}
+        onClick={spaClick(() => goKeyMoment(-1))}
+        className={`${navCls(prevKeyMoment === undefined)} text-zinc-400 hover:text-zinc-200 text-base font-bold`}
         aria-label="Previous key moment"
-      >
-        «
-      </button>
-      <button
-        onClick={() => stepMove(-1)}
-        disabled={moveIdx <= 1}
-        className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 active:bg-zinc-600 transition-colors text-base"
+      >«</a>
+      <a
+        href={moveIdx > 1 ? moveUrl(moveIdx - 1) : undefined}
+        onClick={spaClick(() => stepMove(-1))}
+        className={`${navCls(moveIdx <= 1)} text-zinc-300 hover:text-zinc-100 text-base`}
         aria-label="Previous move"
-      >
-        ‹
-      </button>
+      >‹</a>
       <div className="text-center flex-1">
         <div className="text-sm">
           <span className={`font-semibold tabular-nums ${currentMoment ? "text-zinc-100" : "text-zinc-500"}`}>
@@ -1350,22 +1365,18 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
           {counterSub}
         </div>
       </div>
-      <button
-        onClick={() => stepMove(1)}
-        disabled={moveIdx === positions.length - 1}
-        className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 active:bg-zinc-600 transition-colors text-base"
+      <a
+        href={moveIdx < positions.length - 1 ? moveUrl(moveIdx + 1) : undefined}
+        onClick={spaClick(() => stepMove(1))}
+        className={`${navCls(moveIdx === positions.length - 1)} text-zinc-300 hover:text-zinc-100 text-base`}
         aria-label="Next move"
-      >
-        ›
-      </button>
-      <button
-        onClick={() => goKeyMoment(1)}
-        disabled={nextKeyMoment === undefined}
-        className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 active:bg-zinc-600 transition-colors text-base font-bold"
+      >›</a>
+      <a
+        href={nextKeyMoment !== undefined ? moveUrl(nextKeyMoment) : undefined}
+        onClick={spaClick(() => goKeyMoment(1))}
+        className={`${navCls(nextKeyMoment === undefined)} text-zinc-400 hover:text-zinc-200 text-base font-bold`}
         aria-label="Next key moment"
-      >
-        »
-      </button>
+      >»</a>
     </div>
   );
 
@@ -1373,13 +1384,12 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
     <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center bg-zinc-900/90 backdrop-blur border-b border-zinc-800 shrink-0">
-        <button
-          onClick={onReset}
+        <a
+          href={window.location.pathname}
+          onClick={spaClick(onReset)}
           className="px-3 py-3.5 text-zinc-600 hover:text-zinc-300 transition-colors text-sm shrink-0"
           aria-label="Back to import"
-        >
-          ←
-        </button>
+        >←</a>
         <button
           className="flex-1 flex items-center justify-between px-2 py-3.5 text-left hover:bg-zinc-900 active:bg-zinc-800 transition-colors min-w-0"
           onClick={() => setShowSummary(true)}
@@ -1417,7 +1427,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
               analysisHref={gameId && gameId !== "opera-1858" ? `https://lichess.org/${gameId}#${moveIdx}` : undefined}
             />
           </div>
-          <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
+          <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} gameId={gameId} />
           {controls}
           <div className="md:hidden">
             {commentarySection}
