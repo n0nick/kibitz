@@ -1,4 +1,4 @@
-# Chess Reviewer — TODO
+# Kibitz — TODO
 
 ## Medium priority
 

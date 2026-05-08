@@ -1,4 +1,4 @@
-# Chess Reviewer
+# Kibitz
 
 A mobile-first web app for reviewing chess games with AI coaching and engine analysis. Load a game from Lichess, get AI-generated commentary on key moments, and chat with a coach about any position.
 

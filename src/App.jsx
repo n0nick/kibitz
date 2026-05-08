@@ -901,7 +901,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center pt-16 p-6">
       <div className="w-full max-w-md space-y-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Chess Reviewer</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Kibitz</h1>
           <p className="text-zinc-500 text-sm mt-1">
             {lichessUser ? `Connected as ${lichessUser}` : "Analyze your chess games with AI"}
           </p>
