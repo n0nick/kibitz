@@ -593,7 +593,7 @@ function initialIdxFromUrl() {
   if (!isNaN(moveParam) && moveParam >= 0 && moveParam < POSITIONS.length) {
     return moveParam;
   }
-  return KEY_MOVE_IDXS[0];
+  return 0;
 }
 
 export default function App() {
@@ -697,27 +697,19 @@ export default function App() {
         {/* Move timeline */}
         <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
 
-        {/* Navigation: << < [counter] > >> */}
-        <div className="flex items-center justify-between px-3 py-2 gap-1">
+        {/* Primary navigation: key moment jumps */}
+        <div className="flex items-center justify-between px-4 pt-2 pb-1 gap-2">
           <button
             onClick={() => goKeyMoment(-1)}
             disabled={prevKeyMoment === undefined}
-            className="w-9 h-9 flex items-center justify-center rounded-lg bg-zinc-800/60 disabled:opacity-20 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-xs font-bold"
+            className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
             aria-label="Previous key moment"
           >
-            ««
-          </button>
-          <button
-            onClick={() => stepMove(-1)}
-            disabled={moveIdx === 0}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
-            aria-label="Previous move"
-          >
-            ‹
+            ←
           </button>
 
           <div className="text-center flex-1">
-            <div className="text-sm text-zinc-400">
+            <div className="text-sm">
               <span className={`font-semibold tabular-nums ${currentMoment ? "text-zinc-100" : "text-zinc-500"}`}>
                 {counterLabel}
               </span>
@@ -726,20 +718,32 @@ export default function App() {
           </div>
 
           <button
-            onClick={() => stepMove(1)}
-            disabled={moveIdx === POSITIONS.length - 1}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
-            aria-label="Next move"
-          >
-            ›
-          </button>
-          <button
             onClick={() => goKeyMoment(1)}
             disabled={nextKeyMoment === undefined}
-            className="w-9 h-9 flex items-center justify-center rounded-lg bg-zinc-800/60 disabled:opacity-20 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-xs font-bold"
+            className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
             aria-label="Next key moment"
           >
-            »»
+            →
+          </button>
+        </div>
+
+        {/* Secondary navigation: single-move steps */}
+        <div className="flex items-center justify-center gap-6 pb-2">
+          <button
+            onClick={() => stepMove(-1)}
+            disabled={moveIdx === 0}
+            className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
+            aria-label="Previous move"
+          >
+            ‹ prev move
+          </button>
+          <button
+            onClick={() => stepMove(1)}
+            disabled={moveIdx === POSITIONS.length - 1}
+            className="flex items-center gap-1 text-xs text-zinc-600 disabled:opacity-30 hover:text-zinc-400 active:text-zinc-300 transition-colors py-1 px-2"
+            aria-label="Next move"
+          >
+            next move ›
           </button>
         </div>
 
