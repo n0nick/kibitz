@@ -46,6 +46,32 @@ function buildPositions(pgn) {
 
 const POSITIONS = buildPositions(PGN);
 
+// ─── Evaluations (mock Stockfish) ─────────────────────────────────────────────
+// Centipawns/100, positive = white advantage. Index matches POSITIONS (0 = start).
+// Source of truth for all eval bars; MOMENTS reference these by moveIdx.
+const EVALS = [
+  0.0,                                           // 0: start
+  0.2, 0.2, 0.3, 0.2, 0.3, 0.1, 0.3, 0.1,     // 1–8
+  0.3, 0.2, 0.3, 0.2, 0.4, 0.2, 0.3, 0.2,     // 9–16
+  0.2,                                           // 17: 9.Bg5
+  0.8,                                           // 18: 9...b5?!
+  2.1,                                           // 19: 10.Nxb5!!
+  2.6,                                           // 20: 10...cxb5
+  3.0,                                           // 21: 11.Bxb5+
+  3.0,                                           // 22: 11...Nbd7
+  4.2,                                           // 23: 12.O-O-O!
+  4.2,                                           // 24: 12...Rd8
+  6.8,                                           // 25: 13.Rxd7!
+  6.8,                                           // 26: 13...Rxd7
+  7.5,                                           // 27: 14.Rd1
+  7.8,                                           // 28: 14...Qe6
+  8.3,                                           // 29: 15.Bxd7+
+  8.5,                                           // 30: 15...Nxd7
+  99,                                            // 31: 16.Qb8+!!
+  99,                                            // 32: 16...Nxb8
+  99,                                            // 33: 17.Rd8#
+];
+
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
 const SUMMARY = {
@@ -70,8 +96,6 @@ const MOMENTS = [
     notation: "b5?!",
     player: "black",
     classification: "inaccuracy",
-    evalBefore: 0.2,
-    evalAfter: 0.8,
     explanation:
       "Black advances the b-pawn to challenge White's bishop, but this loosens the queenside pawn structure at precisely the wrong moment — before castling is complete. The pawn push invites the knight leap that follows and opens lines toward the uncastled king.",
     betterMoves: [
@@ -91,8 +115,6 @@ const MOMENTS = [
     notation: "Nxb5!!",
     player: "white",
     classification: "brilliant",
-    evalBefore: 0.8,
-    evalAfter: 2.1,
     explanation:
       "Morphy sacrifices a knight to demolish Black's queenside pawn cover. The c6 pawn is forced to recapture, opening the b-file and creating a pin that Black cannot survive. Material is irrelevant here — Morphy's overwhelming development advantage makes the sacrifice practically mandatory for any advantage-seeking player.",
     betterMoves: [],
@@ -109,8 +131,6 @@ const MOMENTS = [
     notation: "cxb5",
     player: "black",
     classification: "mistake",
-    evalBefore: 2.1,
-    evalAfter: 2.6,
     explanation:
       "Black is forced to capture, but recapturing with the pawn opens the b-file directly toward the uncastled king. There was no satisfactory alternative — declining leaves a powerful knight anchored on b5, and taking with the queen drops c6 anyway.",
     betterMoves: [
@@ -129,8 +149,6 @@ const MOMENTS = [
     notation: "Bxb5+",
     player: "white",
     classification: "good",
-    evalBefore: 2.6,
-    evalAfter: 3.0,
     explanation:
       "The bishop recaptures with check, forcing Black's knight to interpose on d7. This blocks the queen's defense of the d-file and creates immediate coordination problems. The d7 knight is now badly placed — it will soon become the target of a discovered attack.",
     betterMoves: [],
@@ -147,8 +165,6 @@ const MOMENTS = [
     notation: "O-O-O!",
     player: "white",
     classification: "brilliant",
-    evalBefore: 3.0,
-    evalAfter: 4.2,
     explanation:
       "Morphy castles queenside, connecting his rooks directly to the d-file — the most critical open line in the position. The rook immediately eyes d7, where Black's pieces are completely tangled. This move also removes the king from the center with tempo, while simultaneously loading the most powerful gun in chess: a rook on an open file.",
     betterMoves: [],
@@ -165,8 +181,6 @@ const MOMENTS = [
     notation: "Rxd7!",
     player: "white",
     classification: "brilliant",
-    evalBefore: 4.2,
-    evalAfter: 6.8,
     explanation:
       "A second exchange sacrifice that tears apart Black's coordination entirely. The rook takes the knight on d7, and after the forced recapture, White will swing the second rook to d1 to maintain absolute control of the file. Morphy has given up a rook for a knight but gained an initiative that cannot be stopped.",
     betterMoves: [],
@@ -183,8 +197,6 @@ const MOMENTS = [
     notation: "Qb8+!!",
     player: "white",
     classification: "brilliant",
-    evalBefore: 8.5,
-    evalAfter: 99,
     explanation:
       "One of the most famous queen sacrifices in chess history. The queen is offered on b8, and Black must accept — any other move loses material and the position. But after Nxb8, the rook delivers checkmate on d8. The geometry is perfect: the queen draws away the one piece guarding d8, completing the combination.",
     betterMoves: [],
@@ -201,8 +213,6 @@ const MOMENTS = [
     notation: "Rd8#",
     player: "white",
     classification: "good",
-    evalBefore: 99,
-    evalAfter: 99,
     explanation:
       "Checkmate. The rook delivers the final blow on d8, completing a combination that began six moves earlier with a knight sacrifice. The black king has no escape — the bishop on g5 controls f6, and the queen on e6 is pinned by the incoming rook. A perfectly executed miniature, played over the board in an opera box in 1858.",
     betterMoves: [],
@@ -590,6 +600,7 @@ export default function App() {
   const [moveIdx, setMoveIdx] = useState(initialIdxFromUrl);
   const [showSummary, setShowSummary] = useState(false);
   const [chatHistory, setChatHistory] = useState({});
+  const [analysisCache, setAnalysisCache] = useState({});
   const [expandedAlt, setExpandedAlt] = useState(null);
   const touchStartX = useRef(null);
   const scrollRef = useRef(null);
@@ -742,7 +753,7 @@ export default function App() {
                 </span>
                 <Chip classification={currentMoment.classification} />
               </div>
-              <EvalBar before={currentMoment.evalBefore} after={currentMoment.evalAfter} />
+              <EvalBar before={EVALS[currentMoment.moveIdx - 1] ?? 0} after={EVALS[currentMoment.moveIdx]} />
             </div>
             <div className="px-4 py-4">
               <p className="text-sm text-zinc-300 leading-[1.75]">{currentMoment.explanation}</p>
@@ -776,11 +787,32 @@ export default function App() {
           </div>
         ) : (
           moveIdx > 0 && (
-            <div className="mx-4 mb-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/40 px-4 py-3.5 flex items-center gap-3">
-              <span className="font-mono text-zinc-400 text-sm font-semibold">
-                {Math.ceil(moveIdx / 2)}{moveIdx % 2 === 1 ? "." : "..."} {currentPos.san}
-              </span>
-              <span className="text-xs text-zinc-700">no analysis</span>
+            <div className="mx-4 mb-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/40 overflow-hidden">
+              <div className="px-4 pt-4 pb-3.5 border-b border-zinc-800/40">
+                <div className="mb-3">
+                  <span className="font-mono text-zinc-400 text-sm font-semibold">
+                    {Math.ceil(moveIdx / 2)}{moveIdx % 2 === 1 ? "." : "..."} {currentPos.san}
+                  </span>
+                </div>
+                <EvalBar before={EVALS[moveIdx - 1] ?? 0} after={EVALS[moveIdx]} />
+              </div>
+              <div className="px-4 py-4">
+                {analysisCache[moveIdx] ? (
+                  <p className="text-sm text-zinc-400 leading-[1.75]">{analysisCache[moveIdx]}</p>
+                ) : (
+                  <button
+                    onClick={() =>
+                      setAnalysisCache((prev) => ({
+                        ...prev,
+                        [moveIdx]: `(LLM analysis for ${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? "." : "..."} ${currentPos.san} — in production this would include positional assessment, key threats, and coaching notes tailored to this position.)`,
+                      }))
+                    }
+                    className="text-xs text-zinc-500 border border-zinc-700/60 rounded-xl px-4 py-2.5 hover:border-zinc-600 hover:text-zinc-300 transition-colors"
+                  >
+                    Analyze this position
+                  </button>
+                )}
+              </div>
             </div>
           )
         )}
