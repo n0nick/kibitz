@@ -528,10 +528,10 @@ function RichText({ text, onHover, fenBefore, fenAfter }) {
         );
       }
       if (token.startsWith("**") && token.endsWith("**")) {
-        return <strong key={i} className="font-semibold text-zinc-200">{token.slice(2, -2)}</strong>;
+        return <strong key={i} className="font-semibold text-zinc-200">{renderInline(token.slice(2, -2))}</strong>;
       }
       if (token.startsWith("*") && token.endsWith("*") && token.length > 2) {
-        return <em key={i} className="italic">{token.slice(1, -1)}</em>;
+        return <em key={i} className="italic">{renderInline(token.slice(1, -1))}</em>;
       }
       return <span key={i}>{token}</span>;
     });
