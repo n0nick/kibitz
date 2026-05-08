@@ -876,7 +876,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center pt-16 p-6">
       <div className="w-full max-w-md space-y-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Chess Reviewer</h1>
