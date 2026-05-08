@@ -854,7 +854,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
               onChange={(e) => setForceReanalyze(e.target.checked)}
               className="w-3.5 h-3.5 accent-indigo-500"
             />
-            <span className="text-xs text-zinc-500">Re-analyze (skip cache)</span>
+            <span className="text-xs text-zinc-500">Re-analyze (overwrite saved analysis)</span>
           </label>
         </div>
 
