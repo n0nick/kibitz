@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-// No App.css — all styling via Tailwind
+import { Chess } from "chess.js";
 
 // ─── Piece unicode ────────────────────────────────────────────────────────────
 
@@ -18,6 +18,34 @@ const CLS = {
   blunder:    { label: "Blunder",     icon: "??", bg: "bg-red-500/20",    text: "text-red-400",     border: "border-red-500/40",     dot: "bg-red-400"     },
 };
 
+// ─── PGN + position builder ───────────────────────────────────────────────────
+
+const PGN = `[Event "Paris Opera"]
+[Site "Paris FRA"]
+[Date "1858.11.02"]
+[White "Paul Morphy"]
+[Black "Duke Karl / Count Isouard"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7
+8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7
+14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8# 1-0`;
+
+function buildPositions(pgn) {
+  const chess = new Chess();
+  chess.loadPgn(pgn);
+  const history = chess.history({ verbose: true });
+  const temp = new Chess();
+  const out = [{ fen: temp.fen(), san: null, color: null }];
+  for (const mv of history) {
+    temp.move(mv.san);
+    out.push({ fen: temp.fen(), san: mv.san, color: mv.color });
+  }
+  return out;
+}
+
+const POSITIONS = buildPositions(PGN);
+
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
 const SUMMARY = {
@@ -32,16 +60,18 @@ const SUMMARY = {
     "Piece activity over material: across the entire game, Morphy sacrificed a knight and two exchanges, but each sacrifice deepened the initiative rather than ceding it. This is the core philosophy of the romantic era — create threats that cannot all be met simultaneously, and the material will follow.",
 };
 
+// moveIdx: 1-indexed position in POSITIONS (0 = start, 1 = after 1.e4, …)
+// White move N = position 2N-1, Black move N = position 2N
 const MOMENTS = [
   {
     id: 1,
+    moveIdx: 18,
     moveNumber: "9...",
     notation: "b5?!",
     player: "black",
     classification: "inaccuracy",
     evalBefore: 0.2,
     evalAfter: 0.8,
-    fen: "r3kbnr/p3qppp/2p2n2/1p2p1B1/2B1P3/1QN5/PPP2PPP/R3K2R w KQkq - 0 10",
     explanation:
       "Black advances the b-pawn to challenge White's bishop, but this loosens the queenside pawn structure at precisely the wrong moment — before castling is complete. The pawn push invites the knight leap that follows and opens lines toward the uncastled king.",
     betterMoves: [
@@ -56,13 +86,13 @@ const MOMENTS = [
   },
   {
     id: 2,
+    moveIdx: 19,
     moveNumber: "10.",
     notation: "Nxb5!!",
     player: "white",
     classification: "brilliant",
     evalBefore: 0.8,
     evalAfter: 2.1,
-    fen: "r3kbnr/p3qppp/2p2n2/1N2p1B1/2B1P3/1Q6/PPP2PPP/R3K2R b KQkq - 0 10",
     explanation:
       "Morphy sacrifices a knight to demolish Black's queenside pawn cover. The c6 pawn is forced to recapture, opening the b-file and creating a pin that Black cannot survive. Material is irrelevant here — Morphy's overwhelming development advantage makes the sacrifice practically mandatory for any advantage-seeking player.",
     betterMoves: [],
@@ -74,13 +104,13 @@ const MOMENTS = [
   },
   {
     id: 3,
+    moveIdx: 20,
     moveNumber: "10...",
     notation: "cxb5",
     player: "black",
     classification: "mistake",
     evalBefore: 2.1,
     evalAfter: 2.6,
-    fen: "r3kb1r/p3qppp/5n2/1p2p1B1/2B1P3/1Q6/PPP2PPP/R3K2R w KQkq - 0 11",
     explanation:
       "Black is forced to capture, but recapturing with the pawn opens the b-file directly toward the uncastled king. There was no satisfactory alternative — declining leaves a powerful knight anchored on b5, and taking with the queen drops c6 anyway.",
     betterMoves: [
@@ -94,13 +124,13 @@ const MOMENTS = [
   },
   {
     id: 4,
+    moveIdx: 21,
     moveNumber: "11.",
     notation: "Bxb5+",
     player: "white",
     classification: "good",
     evalBefore: 2.6,
     evalAfter: 3.0,
-    fen: "r3kb1r/p2nqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/R3K2R w KQkq - 0 12",
     explanation:
       "The bishop recaptures with check, forcing Black's knight to interpose on d7. This blocks the queen's defense of the d-file and creates immediate coordination problems. The d7 knight is now badly placed — it will soon become the target of a discovered attack.",
     betterMoves: [],
@@ -112,13 +142,13 @@ const MOMENTS = [
   },
   {
     id: 5,
+    moveIdx: 23,
     moveNumber: "12.",
     notation: "O-O-O!",
     player: "white",
     classification: "brilliant",
     evalBefore: 3.0,
     evalAfter: 4.2,
-    fen: "3rkb1r/p2nqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2KR3R b k - 0 13",
     explanation:
       "Morphy castles queenside, connecting his rooks directly to the d-file — the most critical open line in the position. The rook immediately eyes d7, where Black's pieces are completely tangled. This move also removes the king from the center with tempo, while simultaneously loading the most powerful gun in chess: a rook on an open file.",
     betterMoves: [],
@@ -130,13 +160,13 @@ const MOMENTS = [
   },
   {
     id: 6,
+    moveIdx: 25,
     moveNumber: "13.",
     notation: "Rxd7!",
     player: "white",
     classification: "brilliant",
     evalBefore: 4.2,
     evalAfter: 6.8,
-    fen: "4kb1r/p2rqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2K4R b - - 0 13",
     explanation:
       "A second exchange sacrifice that tears apart Black's coordination entirely. The rook takes the knight on d7, and after the forced recapture, White will swing the second rook to d1 to maintain absolute control of the file. Morphy has given up a rook for a knight but gained an initiative that cannot be stopped.",
     betterMoves: [],
@@ -148,13 +178,13 @@ const MOMENTS = [
   },
   {
     id: 7,
+    moveIdx: 31,
     moveNumber: "16.",
     notation: "Qb8+!!",
     player: "white",
     classification: "brilliant",
     evalBefore: 8.5,
     evalAfter: 99,
-    fen: "1Q2kb1r/p2n1ppp/4q3/4p1B1/4P3/8/PPP2PPP/2KR4 b - - 0 16",
     explanation:
       "One of the most famous queen sacrifices in chess history. The queen is offered on b8, and Black must accept — any other move loses material and the position. But after Nxb8, the rook delivers checkmate on d8. The geometry is perfect: the queen draws away the one piece guarding d8, completing the combination.",
     betterMoves: [],
@@ -166,13 +196,13 @@ const MOMENTS = [
   },
   {
     id: 8,
+    moveIdx: 33,
     moveNumber: "17.",
     notation: "Rd8#",
     player: "white",
     classification: "good",
     evalBefore: 99,
     evalAfter: 99,
-    fen: "1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b - - 0 17",
     explanation:
       "Checkmate. The rook delivers the final blow on d8, completing a combination that began six moves earlier with a knight sacrifice. The black king has no escape — the bishop on g5 controls f6, and the queen on e6 is pinned by the incoming rook. A perfectly executed miniature, played over the board in an opera box in 1858.",
     betterMoves: [],
@@ -183,6 +213,9 @@ const MOMENTS = [
     },
   },
 ];
+
+const MOMENT_BY_MOVE_IDX = Object.fromEntries(MOMENTS.map((m) => [m.moveIdx, m]));
+const KEY_MOVE_IDXS = MOMENTS.map((m) => m.moveIdx); // already sorted ascending
 
 // ─── FEN parser ───────────────────────────────────────────────────────────────
 
@@ -212,7 +245,6 @@ function Board({ fen }) {
   return (
     <div className="w-full max-w-[320px] mx-auto select-none">
       <div className="flex items-stretch">
-        {/* Rank labels */}
         <div className="flex flex-col mr-1" style={{ width: 12 }}>
           {ranks.map((r) => (
             <div key={r} className="flex-1 flex items-center justify-center text-[9px] text-zinc-600 font-mono">
@@ -220,7 +252,6 @@ function Board({ fen }) {
             </div>
           ))}
         </div>
-
         <div className="flex-1 flex flex-col">
           <div
             className="grid border border-zinc-600 rounded-sm overflow-hidden"
@@ -256,7 +287,6 @@ function Board({ fen }) {
               })
             )}
           </div>
-          {/* File labels */}
           <div className="flex mt-1">
             {files.map((f) => (
               <div key={f} className="flex-1 text-center text-[9px] text-zinc-600 font-mono">
@@ -278,17 +308,14 @@ function EvalBar({ before, after }) {
     if (v <= -99) return "-M";
     return v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
   };
-
   const toPercent = (v) => {
     if (v >= 99) return 95;
     if (v <= -99) return 5;
     return ((Math.max(-6, Math.min(6, v)) + 6) / 12) * 100;
   };
-
   const pct = toPercent(after);
   const swing = after >= 99 ? 99 - before : after - before;
   const gaining = swing > 0;
-
   return (
     <div className="flex items-center gap-2.5">
       <span className="text-xs font-mono tabular-nums text-zinc-500 w-9 text-right shrink-0">{fmt(before)}</span>
@@ -299,11 +326,7 @@ function EvalBar({ before, after }) {
         />
       </div>
       <span className="text-xs font-mono tabular-nums text-zinc-300 w-9 shrink-0">{fmt(after)}</span>
-      <span
-        className={`text-xs font-semibold w-12 text-right shrink-0 ${
-          gaining ? "text-emerald-400" : "text-red-400"
-        }`}
-      >
+      <span className={`text-xs font-semibold w-12 text-right shrink-0 ${gaining ? "text-emerald-400" : "text-red-400"}`}>
         {after >= 99 ? (
           <span className="text-emerald-400">mate</span>
         ) : (
@@ -330,6 +353,74 @@ function Chip({ classification, small }) {
   );
 }
 
+// ─── Move timeline ────────────────────────────────────────────────────────────
+
+function MoveChip({ posIdx, moveIdx, setRef, onJump }) {
+  const pos = POSITIONS[posIdx];
+  const moment = MOMENT_BY_MOVE_IDX[posIdx];
+  const isActive = posIdx === moveIdx;
+  const cls = moment ? CLS[moment.classification] : null;
+
+  return (
+    <button
+      ref={setRef}
+      onClick={() => onJump(posIdx)}
+      className={`text-[11px] font-mono px-1.5 py-1 rounded transition-all whitespace-nowrap ${
+        isActive
+          ? "bg-zinc-100 text-zinc-900 font-bold"
+          : cls
+          ? `${cls.text} hover:bg-zinc-800/60`
+          : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40"
+      }`}
+    >
+      {pos.san}
+    </button>
+  );
+}
+
+function MoveTimeline({ moveIdx, onJump }) {
+  const chipRefs = useRef({});
+
+  useEffect(() => {
+    chipRefs.current[moveIdx]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [moveIdx]);
+
+  const pairs = [];
+  for (let w = 1; w < POSITIONS.length; w += 2) {
+    pairs.push({ num: Math.ceil(w / 2), w, b: w + 1 < POSITIONS.length ? w + 1 : null });
+  }
+
+  return (
+    <div className="overflow-x-auto border-b border-zinc-800/60" style={{ scrollbarWidth: "none" }}>
+      <div className="flex items-center px-3 py-2 min-w-max gap-0.5">
+        {pairs.map(({ num, w, b }) => (
+          <div key={num} className="flex items-center gap-0.5">
+            <span className="text-[10px] text-zinc-700 font-mono w-5 text-right shrink-0 mr-0.5">{num}.</span>
+            <MoveChip
+              posIdx={w}
+              moveIdx={moveIdx}
+              setRef={(el) => (chipRefs.current[w] = el)}
+              onJump={onJump}
+            />
+            {b !== null && (
+              <MoveChip
+                posIdx={b}
+                moveIdx={moveIdx}
+                setRef={(el) => (chipRefs.current[b] = el)}
+                onJump={onJump}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 function Chat({ moment, history, setHistory }) {
@@ -344,17 +435,14 @@ function Chat({ moment, history, setHistory }) {
   const send = () => {
     const q = input.trim();
     if (!q) return;
-
     const lq = q.toLowerCase();
     const lqa = moment.qa.question.toLowerCase();
     const qaWords = lqa.split(/\W+/).filter((w) => w.length > 4);
     const overlap = qaWords.filter((w) => lq.includes(w));
-
     const answer =
       overlap.length >= 2
         ? moment.qa.answer
         : `(LLM response would appear here — asking about the position after ${moment.moveNumber} ${moment.notation}. In a production version, the coaching engine would analyze your specific question and provide a tailored explanation.)`;
-
     setHistory((prev) => ({
       ...prev,
       [moment.id]: [
@@ -368,7 +456,6 @@ function Chat({ moment, history, setHistory }) {
 
   return (
     <div className="mx-4 mb-8">
-      {/* Hint */}
       {msgs.length === 0 && (
         <button
           className="w-full text-left text-xs text-zinc-500 bg-zinc-900/50 rounded-xl px-4 py-3 mb-3 border border-zinc-800 hover:border-zinc-700 active:bg-zinc-800 transition-colors"
@@ -378,12 +465,13 @@ function Chat({ moment, history, setHistory }) {
           <span className="italic">"{moment.qa.question}"</span>
         </button>
       )}
-
-      {/* Messages */}
       {msgs.length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl mb-3 overflow-hidden divide-y divide-zinc-800/70">
           {msgs.map((msg, i) => (
-            <div key={i} className={`px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "text-zinc-300" : "text-zinc-400"}`}>
+            <div
+              key={i}
+              className={`px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "text-zinc-300" : "text-zinc-400"}`}
+            >
               <div
                 className={`text-[9px] font-bold uppercase tracking-widest mb-1.5 ${
                   msg.role === "user" ? "text-zinc-600" : "text-indigo-500"
@@ -397,8 +485,6 @@ function Chat({ moment, history, setHistory }) {
           <div ref={endRef} />
         </div>
       )}
-
-      {/* Input row */}
       <div className="flex gap-2">
         <input
           type="text"
@@ -436,10 +522,8 @@ function SummaryScreen({ onClose, onJump }) {
           ×
         </button>
       </div>
-
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-4">
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-2">
             {[
               { label: "Result", value: SUMMARY.result, color: "text-emerald-400" },
@@ -452,28 +536,22 @@ function SummaryScreen({ onClose, onJump }) {
               </div>
             ))}
           </div>
-
-          {/* Narrative */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
             <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Game narrative</div>
             <p className="text-sm text-zinc-300 leading-[1.75]">{SUMMARY.narrative}</p>
           </div>
-
-          {/* Pattern */}
           <div className="bg-indigo-950/50 border border-indigo-500/20 rounded-2xl p-4">
             <div className="text-[9px] text-indigo-400 uppercase tracking-widest mb-2.5">Pattern observed</div>
             <p className="text-sm text-zinc-300 leading-[1.75]">{SUMMARY.pattern}</p>
           </div>
-
-          {/* Moment list */}
           <div>
             <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Key moments</div>
             <div className="space-y-1.5">
-              {MOMENTS.map((m, i) => (
+              {MOMENTS.map((m) => (
                 <button
                   key={m.id}
                   className="w-full text-left flex items-start gap-3 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 active:bg-zinc-800 transition-colors"
-                  onClick={() => onJump(i)}
+                  onClick={() => onJump(m.moveIdx)}
                 >
                   <div className="shrink-0 pt-0.5">
                     <span className={`text-xs font-mono font-semibold ${CLS[m.classification]?.text ?? "text-zinc-300"}`}>
@@ -482,9 +560,7 @@ function SummaryScreen({ onClose, onJump }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <Chip classification={m.classification} small />
-                    <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 line-clamp-2">
-                      {m.explanation}
-                    </p>
+                    <p className="text-xs text-zinc-500 leading-relaxed mt-1.5 line-clamp-2">{m.explanation}</p>
                   </div>
                   <span className="text-zinc-600 text-xs mt-0.5 shrink-0">→</span>
                 </button>
@@ -503,50 +579,60 @@ const GAME_ID = "opera-1858";
 
 function initialIdxFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  const moveId = parseInt(params.get("move"), 10);
-  if (!isNaN(moveId)) {
-    const i = MOMENTS.findIndex((m) => m.id === moveId);
-    if (i >= 0) return i;
+  const moveParam = parseInt(params.get("move"), 10);
+  if (!isNaN(moveParam) && moveParam >= 0 && moveParam < POSITIONS.length) {
+    return moveParam;
   }
-  return 0;
+  return KEY_MOVE_IDXS[0];
 }
 
 export default function App() {
-  const [idx, setIdx] = useState(initialIdxFromUrl);
+  const [moveIdx, setMoveIdx] = useState(initialIdxFromUrl);
   const [showSummary, setShowSummary] = useState(false);
   const [chatHistory, setChatHistory] = useState({});
   const [expandedAlt, setExpandedAlt] = useState(null);
   const touchStartX = useRef(null);
   const scrollRef = useRef(null);
 
-  const moment = MOMENTS[idx];
+  const currentMoment = MOMENT_BY_MOVE_IDX[moveIdx] ?? null;
+  const currentPos = POSITIONS[moveIdx];
 
   useEffect(() => {
     const params = new URLSearchParams();
     params.set("game", GAME_ID);
-    params.set("move", moment.id);
+    params.set("move", moveIdx);
     history.replaceState(null, "", "?" + params.toString());
-  }, [idx]);
+  }, [moveIdx]);
 
-  const go = (dir) => {
-    const next = idx + dir;
-    if (next >= 0 && next < MOMENTS.length) {
-      setIdx(next);
-      setExpandedAlt(null);
-      scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    }
+  const prevKeyMoment = [...KEY_MOVE_IDXS].reverse().find((i) => i < moveIdx);
+  const nextKeyMoment = KEY_MOVE_IDXS.find((i) => i > moveIdx);
+  const currentMomentRank = currentMoment ? MOMENTS.indexOf(currentMoment) + 1 : null;
+
+  const jumpTo = (idx) => {
+    setMoveIdx(idx);
+    setExpandedAlt(null);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const onTouchStart = (e) => {
-    touchStartX.current = e.touches[0].clientX;
+  const goKeyMoment = (dir) => {
+    const target = dir > 0 ? nextKeyMoment : prevKeyMoment;
+    if (target !== undefined) jumpTo(target);
   };
 
+  const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchEnd = (e) => {
     if (touchStartX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
-    if (Math.abs(dx) > 60) go(dx < 0 ? 1 : -1);
+    if (Math.abs(dx) > 60) goKeyMoment(dx < 0 ? 1 : -1);
     touchStartX.current = null;
   };
+
+  const counterLabel = currentMoment
+    ? `${currentMomentRank} / ${MOMENTS.length}`
+    : moveIdx === 0
+    ? "Start"
+    : `${moveIdx} / ${POSITIONS.length - 1}`;
+  const counterSub = currentMoment ? "key moments" : "all moves";
 
   return (
     <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col max-w-md mx-auto overflow-hidden">
@@ -579,119 +665,108 @@ export default function App() {
       >
         {/* Board */}
         <div className="px-4 pt-5 pb-3">
-          <Board fen={moment.fen} />
+          <Board fen={currentPos.fen} />
         </div>
 
-        {/* Navigation */}
+        {/* Move timeline */}
+        <MoveTimeline moveIdx={moveIdx} onJump={jumpTo} />
+
+        {/* Navigation — arrows jump key moments, counter shows context */}
         <div className="flex items-center justify-between px-4 py-2">
           <button
-            onClick={() => go(-1)}
-            disabled={idx === 0}
+            onClick={() => goKeyMoment(-1)}
+            disabled={prevKeyMoment === undefined}
             className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
-            aria-label="Previous moment"
+            aria-label="Previous key moment"
           >
             ←
           </button>
 
           <div className="text-center">
             <div className="text-sm text-zinc-400">
-              <span className="text-zinc-100 font-semibold tabular-nums">{idx + 1}</span>
-              <span className="mx-1.5 text-zinc-600">/</span>
-              <span className="tabular-nums">{MOMENTS.length}</span>
+              <span className={`font-semibold tabular-nums ${currentMoment ? "text-zinc-100" : "text-zinc-500"}`}>
+                {counterLabel}
+              </span>
             </div>
-            <div className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5">key moments</div>
+            <div className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5">{counterSub}</div>
           </div>
 
           <button
-            onClick={() => go(1)}
-            disabled={idx === MOMENTS.length - 1}
+            onClick={() => goKeyMoment(1)}
+            disabled={nextKeyMoment === undefined}
             className="w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-800/80 disabled:opacity-20 text-zinc-300 hover:bg-zinc-700 active:bg-zinc-600 transition-colors text-lg"
-            aria-label="Next moment"
+            aria-label="Next key moment"
           >
             →
           </button>
         </div>
 
-        {/* Progress dots */}
-        <div className="flex items-center justify-center gap-1.5 pb-4">
-          {MOMENTS.map((m, i) => {
-            const s = CLS[m.classification];
-            return (
-              <button
-                key={i}
-                onClick={() => { setIdx(i); setExpandedAlt(null); scrollRef.current?.scrollTo({ top: 0 }); }}
-                className={`rounded-full transition-all duration-200 ${
-                  i === idx
-                    ? `w-5 h-1.5 ${s?.dot ?? "bg-zinc-400"}`
-                    : "w-1.5 h-1.5 bg-zinc-700 hover:bg-zinc-500"
-                }`}
-              />
-            );
-          })}
-        </div>
-
         {/* Commentary card */}
-        <div className="mx-4 mb-4 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
-          {/* Move + classification header */}
-          <div className="px-4 pt-4 pb-3.5 border-b border-zinc-800/60">
-            <div className="flex items-center gap-3 flex-wrap mb-3">
-              <span className="text-xl font-bold tracking-tight text-zinc-100 font-mono">
-                {moment.moveNumber} {moment.notation}
+        {currentMoment ? (
+          <div className="mx-4 mb-4 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
+            <div className="px-4 pt-4 pb-3.5 border-b border-zinc-800/60">
+              <div className="flex items-center gap-3 flex-wrap mb-3">
+                <span className="text-xl font-bold tracking-tight text-zinc-100 font-mono">
+                  {currentMoment.moveNumber} {currentMoment.notation}
+                </span>
+                <Chip classification={currentMoment.classification} />
+              </div>
+              <EvalBar before={currentMoment.evalBefore} after={currentMoment.evalAfter} />
+            </div>
+            <div className="px-4 py-4">
+              <p className="text-sm text-zinc-300 leading-[1.75]">{currentMoment.explanation}</p>
+            </div>
+            {currentMoment.betterMoves.length > 0 && (
+              <div className="px-4 pb-4 border-t border-zinc-800/60 pt-3.5">
+                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Better alternatives</div>
+                <div className="flex flex-wrap gap-2">
+                  {currentMoment.betterMoves.map((alt, i) => (
+                    <div key={i} className="flex-1 min-w-[110px]">
+                      <button
+                        onClick={() => setExpandedAlt(expandedAlt === i ? null : i)}
+                        className={`w-full text-sm px-3.5 py-2.5 rounded-xl border transition-all font-mono font-semibold ${
+                          expandedAlt === i
+                            ? "bg-zinc-700 border-zinc-600 text-zinc-100"
+                            : "bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"
+                        }`}
+                      >
+                        {alt.move}
+                      </button>
+                      {expandedAlt === i && (
+                        <p className="mt-2 text-xs text-zinc-400 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 leading-relaxed">
+                          {alt.reason}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          moveIdx > 0 && (
+            <div className="mx-4 mb-4 rounded-2xl bg-zinc-900/40 border border-zinc-800/40 px-4 py-3.5 flex items-center gap-3">
+              <span className="font-mono text-zinc-400 text-sm font-semibold">
+                {Math.ceil(moveIdx / 2)}{moveIdx % 2 === 1 ? "." : "..."} {currentPos.san}
               </span>
-              <Chip classification={moment.classification} />
+              <span className="text-xs text-zinc-700">no analysis</span>
             </div>
-            <EvalBar before={moment.evalBefore} after={moment.evalAfter} />
-          </div>
+          )
+        )}
 
-          {/* Explanation */}
-          <div className="px-4 py-4">
-            <p className="text-sm text-zinc-300 leading-[1.75]">{moment.explanation}</p>
-          </div>
-
-          {/* Better moves */}
-          {moment.betterMoves.length > 0 && (
-            <div className="px-4 pb-4 border-t border-zinc-800/60 pt-3.5">
-              <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">
-                Better alternatives
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {moment.betterMoves.map((alt, i) => (
-                  <div key={i} className="flex-1 min-w-[110px]">
-                    <button
-                      onClick={() => setExpandedAlt(expandedAlt === i ? null : i)}
-                      className={`w-full text-sm px-3.5 py-2.5 rounded-xl border transition-all font-mono font-semibold ${
-                        expandedAlt === i
-                          ? "bg-zinc-700 border-zinc-600 text-zinc-100"
-                          : "bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"
-                      }`}
-                    >
-                      {alt.move}
-                    </button>
-                    {expandedAlt === i && (
-                      <p className="mt-2 text-xs text-zinc-400 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 leading-relaxed">
-                        {alt.reason}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Chat */}
-        <Chat moment={moment} history={chatHistory} setHistory={setChatHistory} />
+        {/* Chat — key moments only */}
+        {currentMoment && (
+          <Chat moment={currentMoment} history={chatHistory} setHistory={setChatHistory} />
+        )}
       </div>
 
       {/* Summary overlay */}
       {showSummary && (
         <SummaryScreen
           onClose={() => setShowSummary(false)}
-          onJump={(i) => {
-            setIdx(i);
-            setExpandedAlt(null);
+          onJump={(targetMoveIdx) => {
+            jumpTo(targetMoveIdx);
             setShowSummary(false);
-            scrollRef.current?.scrollTo({ top: 0 });
           }}
         />
       )}
