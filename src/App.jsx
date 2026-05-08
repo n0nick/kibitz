@@ -499,8 +499,20 @@ function SummaryScreen({ onClose, onJump }) {
 
 // ─── Main app ─────────────────────────────────────────────────────────────────
 
+const GAME_ID = "opera-1858";
+
+function initialIdxFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const moveId = parseInt(params.get("move"), 10);
+  if (!isNaN(moveId)) {
+    const i = MOMENTS.findIndex((m) => m.id === moveId);
+    if (i >= 0) return i;
+  }
+  return 0;
+}
+
 export default function App() {
-  const [idx, setIdx] = useState(0);
+  const [idx, setIdx] = useState(initialIdxFromUrl);
   const [showSummary, setShowSummary] = useState(false);
   const [chatHistory, setChatHistory] = useState({});
   const [expandedAlt, setExpandedAlt] = useState(null);
@@ -508,6 +520,13 @@ export default function App() {
   const scrollRef = useRef(null);
 
   const moment = MOMENTS[idx];
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("game", GAME_ID);
+    params.set("move", moment.id);
+    history.replaceState(null, "", "?" + params.toString());
+  }, [idx]);
 
   const go = (dir) => {
     const next = idx + dir;
