@@ -1002,7 +1002,7 @@ function ImportScreen({ onImport, onDemo, error, setError, apiKey, setApiKey, to
               {!settingsOpen && (
                 <span className="flex items-center gap-2 text-[10px]">
                   {apiKey && <span className="text-emerald-500">Anthropic ✓</span>}
-                  {lichessUser && <span className="text-emerald-500">{lichessUser} ✓</span>}
+                  {lichessUser && <span className="text-emerald-500">Lichess ✓</span>}
                 </span>
               )}
               <span className="text-zinc-600 group-hover:text-zinc-400 transition-colors text-xs">
