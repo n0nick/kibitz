@@ -57,6 +57,12 @@ Uses `claude-haiku-4-5` for all AI calls. Typical cost:
 
 Stockfish analysis is free (runs locally in WASM).
 
+## Roadmap
+
+- **Analysis personas** — named coaches with distinct styles beyond Beginner/Intermediate/Advanced
+- **Lichess OAuth PKCE** — proper OAuth flow instead of manual personal token
+- **Anthropic OAuth** — remove the need to supply an API key manually
+
 ## Stack
 
 - React 19 + Vite
