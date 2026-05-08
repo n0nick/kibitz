@@ -1103,7 +1103,9 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
           ) : analysisCache[moveIdx] === "error" ? (
             <p className="text-sm text-red-500/70">Analysis failed. Check your API key.</p>
           ) : analysisCache[moveIdx] ? (
-            <p className="text-sm text-zinc-400 leading-[1.75]">{analysisCache[moveIdx]}</p>
+            <p className="text-sm text-zinc-400 leading-[1.75]">
+              <AnnotatedText text={analysisCache[moveIdx]} onHover={setHoverHighlight} fenBefore={positions[moveIdx - 1]?.fen} fenAfter={currentPos.fen} />
+            </p>
           ) : (
             <button
               onClick={async () => {
