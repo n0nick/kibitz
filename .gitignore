@@ -32,6 +32,9 @@ lerna-debug.log*
 .DS_Store
 Thumbs.db
 
+# Benchmark results (generated, not committed)
+benchmark/results/
+
 # Editors
 .vscode/*
 !.vscode/extensions.json

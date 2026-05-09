@@ -1,0 +1,17 @@
+{
+  "game": "Spassky vs Fischer, WCC 1972 Game 11",
+  "pattern": "poisoned_pawn",
+  "must_flag_moves": [
+    {"ply": 15, "expected_classification": "inaccuracy", "note": "8...Qxb2 grabs the poisoned pawn — ply 15 (Black's 8th move). It's a known theoretical try but Spassky had deep preparation."},
+    {"ply": 27, "expected_classification": "brilliant", "note": "14.Nb1!? — ply 27 (White's 14th move). The prepared retreat is the key novelty."}
+  ],
+  "must_not_flag_moves": [
+    {"ply": 27, "note": "14.Nb1 should NOT be flagged as a mistake or blunder — it looks passive but is the refutation"}
+  ],
+  "required_concepts": ["poisoned pawn", "opening preparation", "prophylaxis"],
+  "forbidden_claims": [
+    "8...Qxb2 is a simple blunder",
+    "14.Nb1 loses time",
+    "14.Nb1 is passive without compensation"
+  ]
+}

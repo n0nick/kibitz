@@ -1,0 +1,14 @@
+{
+  "game": "Colle vs O'Hanlon, Nice 1930",
+  "pattern": "greek_gift",
+  "must_flag_moves": [
+    {"ply": 23, "expected_classification": "brilliant", "note": "12.Bxh7+ is the Greek Gift sacrifice — ply 23 (White's 12th move)"}
+  ],
+  "must_not_flag_moves": [],
+  "required_concepts": ["greek gift", "king walk", "sacrifice"],
+  "forbidden_claims": [
+    "Bxh7 loses material",
+    "the sacrifice is unsound",
+    "Black has adequate defense after Kxh7"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "game": "Levitsky vs Marshall, Breslau 1912",
+  "pattern": "quiet_best_move",
+  "must_flag_moves": [
+    {"ply": 45, "expected_classification": "brilliant", "note": "23...Qg3!! (ply 45, Black's 23rd move) — the legendary queen sacrifice that wins by force regardless of White's reply"}
+  ],
+  "must_not_flag_moves": [],
+  "required_concepts": ["queen sacrifice", "mating attack", "deflection"],
+  "forbidden_claims": [
+    "23...Qg3 is a mistake",
+    "White can capture the queen safely",
+    "the position is unclear after Qg3"
+  ]
+}

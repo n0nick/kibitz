@@ -1,0 +1,15 @@
+{
+  "game": "Kramnik vs Kasparov, BrainGames WCh 2000 Game 4",
+  "pattern": "fortress",
+  "must_flag_moves": [],
+  "must_not_flag_moves": [
+    {"ply": 111, "note": "55...Ra5 (ply 111) — Kasparov's fortress defense should NOT be classified as a blunder despite engine eval favoring White"},
+    {"ply": 113, "note": "56...Ra5 rook moves holding the fortress"}
+  ],
+  "required_concepts": ["fortress", "drawing technique", "rook endgame"],
+  "forbidden_claims": [
+    "White is winning easily",
+    "Black should resign",
+    "the position is completely lost for Black"
+  ]
+}

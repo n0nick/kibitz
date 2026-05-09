@@ -1,0 +1,30 @@
+[Event "Corus"]
+[Site "Wijk aan Zee NED"]
+[Date "1999.01.20"]
+[Round "4"]
+[White "Kasparov, Garry"]
+[Black "Topalov, Veselin"]
+[Result "1-0"]
+[ECO "B07"]
+[Opening "Pirc Defense"]
+[Annotator "Kibitz Benchmark Reference"]
+
+1. e4 d6 2. d4 Nf6 3. Nc3 g6 4. Be3 Bg7 5. Qd2 c6 6. f3 b5 7. Nge2 Nbd7
+8. Bh6 Bxh6 9. Qxh6 {Trading the bishop pair to get the dark-squared bishop and expose Black's king.} Bb7
+10. a3 e5 11. O-O-O {! Castling queenside to attack on the kingside.} Qe7
+12. Kb1 {Tucking the king away before the storm.} a6 13. Nc1 {! Knight maneuver to b3 or a5 to pressure the queenside.} O-O-O
+14. Nb3 {Centralizing and threatening Nd5.} exd4 15. Rxd4 {! The rook swings to d4 — active rook play.} c5
+16. Rd1 {! Retreating with tempo — the rook goes where it belongs.} Nb6
+17. g3 Kb8 18. Na5 {! The knight finds the perfect outpost.} Ba8
+19. Bh3 {! The bishop joins the attack — threatening Bxd7 and Bg2.} d5
+20. Qf4+ Ka7 21. Rhe1 {All pieces are mobilized. The attack is ready.} d4
+22. Nd5 {!! Sacrificing the knight — the beginning of Kasparov's immortal combination.} Nbxd5
+23. exd5 Qd6 24. Rxd4 {!! The first rook sacrifice — Kasparov gives material freely to open lines.} cxd4
+25. Re7+ {!! The second rook sacrifice — absolutely stunning.} Kb6
+26. Qxd4+ Kxa5 27. b4+ Ka4 28. Qc3 {! The queen joins the mating net. The king has no shelter.} Qxd5
+29. Ra7 {!! The third sacrifice — the rook pins the bishop with unstoppable threats.} Bb7
+30. Rxb7 {Taking the bishop that defended a6.} Qc4 31. Qxf6 {! Winning more material while maintaining the attack.} Kxa3
+32. Qxa6+ Kxb4 33. c3+ {! Driving the king into the open.} Kxc3
+34. Qa1+ Kd2 35. Qb2+ Kd1 36. Bf1 {!! The quiet bishop move — the final piece joins the mating net.} Rd2
+37. Rd7 {! Forcing the rook to a bad square.} Rxd7 38. Bxc4 {Winning the queen.} bxc4
+39. Qxh8 Rd3 40. Qa8 c3 41. Qa4+ Ke1 42. f4 f5 43. Kc1 Rd2 44. Qa7 {1-0. Black cannot stop Qa1# — a game of unparalleled combinational depth.} 1-0

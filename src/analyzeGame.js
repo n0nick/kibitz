@@ -1,4 +1,5 @@
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
+export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -10,22 +11,23 @@ function toneDesc(tone) {
   return TONES.find((t) => t.value === tone)?.desc ?? TONES[0].desc;
 }
 
-async function callApi(messages, apiKey, { system, maxTokens = 1024 } = {}) {
-  const body = {
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: maxTokens,
-    messages,
-  };
+async function callApi(messages, apiKey, { system, maxTokens = 1024, model = DEFAULT_MODEL } = {}) {
+  const body = { model, max_tokens: maxTokens, messages };
   if (system) body.system = system;
+
+  const headers = {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+  };
+  // Browser requires this header for direct API calls; Node does not
+  if (typeof window !== "undefined") {
+    headers["anthropic-dangerous-direct-browser-access"] = "true";
+  }
 
   const res = await fetch(ANTHROPIC_API, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -35,7 +37,7 @@ async function callApi(messages, apiKey, { system, maxTokens = 1024 } = {}) {
   }
 
   const data = await res.json();
-  return data.content[0].text;
+  return { text: data.content[0].text, usage: data.usage };
 }
 
 const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation and reason:
@@ -46,11 +48,11 @@ const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation an
 - Use lowercase algebraic squares (a1–h8)
 - Include 2–3 annotations per explanation; annotate every key square and move`;
 
-const MAX_MOMENTS = 25;
+export const MAX_MOMENTS = 25;
 
-function selectMoments(moments, evals) {
+export function selectMoments(moments, evals) {
   if (moments.length <= MAX_MOMENTS) return [...moments].sort((a, b) => a.moveIdx - b.moveIdx);
-  // Fallback for extreme outliers: proportional sampling across game thirds
+  // Proportional sampling across game thirds for extreme outliers
   const totalMoves = evals.length - 1;
   const swing = (m) => Math.abs((evals[m.moveIdx] ?? 0) - (evals[m.moveIdx - 1] ?? 0));
   const bySwing = (arr) => [...arr].sort((a, b) => swing(b) - swing(a));
@@ -70,12 +72,10 @@ function selectMoments(moments, evals) {
   return [...selected].sort((a, b) => a.moveIdx - b.moveIdx);
 }
 
-function buildPrompt(pgn, moments, summary, evals, tone) {
+export function buildPrompt(pgn, moments, summary, evals, tone) {
   const cleanPgn = pgn.replace(/\{[^}]*\}/g, "").replace(/\s+/g, " ").trim();
   const fmt = (v) => (v >= 99 ? "M" : v <= -99 ? "-M" : v.toFixed(1));
-
   const topMoments = selectMoments(moments, evals);
-
   const momentsList = topMoments
     .map((m) => {
       const before = evals[m.moveIdx - 1] ?? 0;
@@ -133,15 +133,29 @@ function repairJson(raw) {
   return out;
 }
 
-export async function analyzeGame(pgn, moments, summary, evals, apiKey, tone = "beginner") {
-  const text = await callApi(
-    [{ role: "user", content: buildPrompt(pgn, moments, summary, evals, tone) }],
+// promptBuilder: optional fn(pgn, moments, summary, evals, tone) => string override
+export async function analyzeGame(pgn, moments, summary, evals, apiKey, tone = "beginner", model, promptBuilder) {
+  const prompt = (promptBuilder ?? buildPrompt)(pgn, moments, summary, evals, tone);
+  const { text } = await callApi(
+    [{ role: "user", content: prompt }],
     apiKey,
-    { maxTokens: 8192 }
+    { maxTokens: 8192, model: model ?? DEFAULT_MODEL }
   );
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("No JSON in API response");
   return JSON.parse(repairJson(match[0]));
+}
+
+export async function analyzeGameWithUsage(pgn, moments, summary, evals, apiKey, tone = "beginner", model, promptBuilder) {
+  const prompt = (promptBuilder ?? buildPrompt)(pgn, moments, summary, evals, tone);
+  const { text, usage } = await callApi(
+    [{ role: "user", content: prompt }],
+    apiKey,
+    { maxTokens: 8192, model: model ?? DEFAULT_MODEL }
+  );
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON in API response");
+  return { result: JSON.parse(repairJson(match[0])), usage };
 }
 
 export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone }, apiKey) {
@@ -158,7 +172,8 @@ ${ANNOTATION_RULES}
 
 Reply with plain text only (no JSON).`;
 
-  return callApi([{ role: "user", content: prompt }], apiKey);
+  const { text } = await callApi([{ role: "user", content: prompt }], apiKey);
+  return text;
 }
 
 export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine }, apiKey) {
@@ -173,5 +188,6 @@ IMPORTANT: Only claim a move gives check or captures a piece if it genuinely doe
     { role: "user", content: question },
   ];
 
-  return callApi(apiMessages, apiKey, { system, maxTokens: 512 });
+  const { text } = await callApi(apiMessages, apiKey, { system, maxTokens: 512 });
+  return text;
 }

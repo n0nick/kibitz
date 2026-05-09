@@ -1,0 +1,13 @@
+[Event "Paris Opera"]
+[Site "Paris FRA"]
+[Date "1858.11.02"]
+[Round "?"]
+[White "Morphy, Paul"]
+[Black "Duke Karl / Count Isouard"]
+[Result "1-0"]
+[ECO "C41"]
+[Opening "Philidor Defense"]
+[Annotator "Kibitz Benchmark Reference"]
+
+1. e4 e5 2. Nf3 d6 3. d4 Bg4 {Passive development pinning the knight, but Black should be completing development not attacking a developed piece.}
+4. dxe5 {! Opening the center while Black's bishop is offside.} Bxf3 5. Qxf3 {! Recapturing with the queen, which is actually strong here because it maintains pressure and eyes b7.} dxe5 6. Bc4 {Developing with tempo, eyeing the vulnerable f7 square.} Nf6 7. Qb3 {!! The star move — attacks f7 and the b7 pawn simultaneously, creating an impossible defense.} Qe7 {? Black must give up something. The queen blocks the bishop and looks awkward.} 8. Nc3 {! Rapid development — Morphy refuses to take the pawn and instead brings another piece into the game.} c6 9. Bg5 {! Another developing move with a threat, pinning the f6 knight.} b5 {? Desperate counterplay that loses material by force.} 10. Nxb5 {!! The key tactical shot — sacrificing the knight to strip away Black's defenses.} cxb5 11. Bxb5+ {! Check forces the king's knight to block.} Nbd7 12. O-O-O {! Castling queenside while attacking the pinned d7 knight. All pieces work together.} Rd8 13. Rxd7 {!! The magnificent rook sacrifice — removing the key defender.} Rxd7 14. Rd1 {! The back rank motif: the rook joins the attack with decisive effect.} Qe6 {Forced — must defend against Bxd7+.} 15. Bxd7+ {Winning material and maintaining the attack.} Nxd7 16. Qb8+ {!! The queen sacrifice — a beautiful quiet move. Nxb8 is forced.} Nxb8 17. Rd8# {The pin on the rook delivers checkmate. A perfect illustration of piece coordination and rapid development.} 1-0

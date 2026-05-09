@@ -112,6 +112,8 @@ export async function analyzeFullGame(positions, { onProgress, signal } = {}) {
   return signal?.aborted ? null : evals;
 }
 
+export const browserEngine = { analyzeFullGame };
+
 export function engineLineText(lines) {
   if (!lines || lines.length === 0) return null;
   const depth = lines[0]?.depth;

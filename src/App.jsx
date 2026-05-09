@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame, reclassifyWithEvals, sanToSquares } from "./parseGame";
-import { analyzeGame, analyzeSinglePosition, chatAboutPosition, TONES } from "./analyzeGame";
+import { analyzeSinglePosition, chatAboutPosition, TONES } from "./analyzeGame";
 import { fetchLichessAccount, fetchLichessRecentGames } from "./lichess";
-import { analyzePosition, analyzeFullGame, engineLineText } from "./stockfish";
+import { analyzePosition, browserEngine, engineLineText } from "./stockfish";
+import { mergeAnalysis, analyzePositions, analyzeWithClaude } from "./pipeline";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
 
@@ -219,31 +220,6 @@ const DEMO_GAME = {
   keyMoveIdxs: DEMO_MOMENTS.map((m) => m.moveIdx),
   hasEvals: true,
 };
-
-// ─── Analysis merge ───────────────────────────────────────────────────────────
-
-function mergeAnalysis(game, result) {
-  const updatedMoments = game.moments.map((m) => {
-    const a = result.moments?.find((r) => r.moveIdx === m.moveIdx);
-    if (!a) return m;
-    return {
-      ...m,
-      explanation: a.explanation ?? m.explanation,
-      betterMoves: a.betterMoves ?? m.betterMoves,
-      qa: a.suggestedQuestion ? { question: a.suggestedQuestion, answer: null } : m.qa,
-    };
-  });
-  return {
-    ...game,
-    summary: {
-      ...game.summary,
-      narrative: result.narrative ?? game.summary.narrative,
-      pattern: result.pattern ?? game.summary.pattern,
-    },
-    moments: updatedMoments,
-    momentByMoveIdx: Object.fromEntries(updatedMoments.map((m) => [m.moveIdx, m])),
-  };
-}
 
 // ─── SPA-safe click: prevent default only for plain left-clicks so cmd/ctrl/middle still open new tabs
 
@@ -1727,14 +1703,13 @@ export default function App() {
       }
     } catch { localStorage.removeItem(evalsKey); }
 
-    const evals = await analyzeFullGame(gameData.positions, {
+    const reclassified = await analyzePositions(gameData, browserEngine, {
       signal: controller.signal,
       onProgress: (current, total) => setLocalProgress({ current, total }),
     });
-    if (!evals) return;
+    if (!reclassified) return;
 
-    localStorage.setItem(evalsKey, JSON.stringify({ data: evals, ts: Date.now() }));
-    const reclassified = reclassifyWithEvals(gameData, evals);
+    localStorage.setItem(evalsKey, JSON.stringify({ data: reclassified.evals, ts: Date.now() }));
     setGameData(reclassified);
     setLocalProgress(null);
     if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId);
@@ -1815,11 +1790,7 @@ export default function App() {
     }
     setAnalysisStatus("loading");
     try {
-      const effectivePgn = pgn ?? game.positions.slice(1).map((p, i) => {
-        const n = Math.ceil((i + 1) / 2);
-        return (i % 2 === 0 ? `${n}. ` : "") + p.san;
-      }).join(" ");
-      const result = await analyzeGame(effectivePgn, game.moments, game.summary, game.evals, key, t);
+      const { result } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t });
       localStorage.setItem(cacheKey, JSON.stringify({ data: result, ts: Date.now() }));
       setGameData((prev) => prev ? mergeAnalysis(prev, result) : prev);
       setAnalysisStatus("done");

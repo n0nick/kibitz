@@ -1,0 +1,14 @@
+{
+  "game": "Sämisch vs Nimzowitsch, Copenhagen 1923",
+  "pattern": "zugzwang",
+  "must_flag_moves": [
+    {"ply": 49, "expected_classification": "brilliant", "note": "25...h6!! (ply 49, Black's 25th move) — the quiet pawn move that creates complete zugzwang"}
+  ],
+  "must_not_flag_moves": [],
+  "required_concepts": ["zugzwang", "restriction", "quiet move"],
+  "forbidden_claims": [
+    "25...h6 doesn't change the evaluation much",
+    "White has many good replies after h6",
+    "White can escape the zugzwang"
+  ]
+}
