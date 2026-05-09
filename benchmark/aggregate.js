@@ -90,7 +90,7 @@ async function main() {
     const analysisFiles = readdirSync(bucketDir).filter(f => f.endsWith('.analysis.json')).sort();
     console.log(`\n[${bucketName}] ${analysisFiles.length} games`);
 
-    for (const fname of analysisFiles) {
+    const settled = await Promise.allSettled(analysisFiles.map(async (fname) => {
       const analysisPath = path.join(bucketDir, fname);
       const gameId = fname.replace('.analysis.json', '');
       const analysis = JSON.parse(readFileSync(analysisPath, 'utf8'));
@@ -132,8 +132,13 @@ async function main() {
         latency_ms: analysis.metadata.latency_ms,
         moves_count: analysis.game_metadata.moves_count,
       };
-      rows.push(row);
       console.log(`  ${gameId}: tactical=${row.tactical_accuracy ?? '?'} move_sel=${row.move_selection ?? '?'} halluc=${row.hallucination_count ?? '?'}`);
+      return row;
+    }));
+
+    for (const r of settled) {
+      if (r.status === 'fulfilled') rows.push(r.value);
+      else console.error(`  ✗ ${r.reason?.message}`);
     }
   }
 

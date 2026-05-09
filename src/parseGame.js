@@ -64,12 +64,23 @@ function evalLoss(before, after, color) {
   return color === "w" ? b - a : a - b;
 }
 
-function classify(loss) {
-  if (loss >= 2.0) return "blunder";
-  if (loss >= 0.5) return "mistake";
-  if (loss >= 0.2) return "inaccuracy";
-  if (loss <= -2.0) return "brilliant";
-  if (loss <= -0.5) return "great";
+function classify(loss, evalBefore, evalAfter) {
+  if (loss >= 3.0)  return "blunder";
+  if (loss >= 1.0)  return "mistake";
+  if (loss >= 0.5)  return "inaccuracy";
+  if (loss <= -2.0 || loss <= -0.5) {
+    // Suppress brilliant/great when BOTH positions are highly imbalanced (|eval| ≥ 3.0
+    // on both sides of the move). This covers two cases:
+    //   • Staying in a decisive range (e.g. +4 → +5): routine technique, not brilliant
+    //   • Wild oscillations in a messy game (e.g. +4 → -4): alternating recaptures
+    //     that flip the eval, not actual brilliancies
+    const alreadyDecisive =
+      evalBefore != null && evalAfter != null &&
+      Math.abs(evalBefore) >= 3.0 &&
+      Math.abs(evalAfter) >= 3.0;
+    if (alreadyDecisive) return "good";
+    return loss <= -2.0 ? "brilliant" : "great";
+  }
   return "good";
 }
 
@@ -90,7 +101,7 @@ export function parseGame(pgn) {
   for (let i = 1; i < positions.length; i++) {
     const pos = positions[i];
     const loss = evalLoss(evals[i - 1], evals[i], pos.color);
-    const classification = classify(loss);
+    const classification = classify(loss, evals[i - 1], evals[i]);
     if (classification !== "good") {
       const moveNum = Math.ceil(i / 2);
       const isWhite = i % 2 === 1;
@@ -139,7 +150,7 @@ export function reclassifyWithEvals(parsed, evals) {
   for (let i = 1; i < positions.length; i++) {
     const pos = positions[i];
     const loss = evalLoss(evals[i - 1], evals[i], pos.color);
-    const classification = classify(loss);
+    const classification = classify(loss, evals[i - 1], evals[i]);
     if (classification !== "good") {
       const moveNum = Math.ceil(i / 2);
       moments.push({

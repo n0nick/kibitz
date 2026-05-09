@@ -48,7 +48,7 @@ const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation an
 - Use lowercase algebraic squares (a1–h8)
 - Include 2–3 annotations per explanation; annotate every key square and move`;
 
-export const MAX_MOMENTS = 25;
+export const MAX_MOMENTS = 12;
 
 export function selectMoments(moments, evals) {
   if (moments.length <= MAX_MOMENTS) return [...moments].sort((a, b) => a.moveIdx - b.moveIdx);

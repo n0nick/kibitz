@@ -28,38 +28,34 @@ async function runBucket(bucketDir, bucketName, outDir, opts) {
     .filter(f => f.endsWith('.pgn'))
     .sort();
 
-  console.log(`\n[${bucketName}] ${pgnFiles.length} games`);
+  console.log(`\n[${bucketName}] ${pgnFiles.length} games (parallel)`);
+  mkdirSync(path.join(outDir, bucketName), { recursive: true });
 
-  const summaries = [];
-  for (const fname of pgnFiles) {
+  const results = await Promise.allSettled(pgnFiles.map(async (fname) => {
     const gameId = fname.replace(/\.pgn$/, '');
     const pgnPath = path.join(bucketDir, fname);
     const outPath = path.join(outDir, bucketName, `${gameId}.analysis.json`);
-
-    mkdirSync(path.dirname(outPath), { recursive: true });
-
-    console.log(`  → ${gameId}`);
     const pgn = readFileSync(pgnPath, 'utf8');
     const t0 = Date.now();
-    try {
-      const result = await analyzeGameForBenchmark(pgn, {
-        tone: opts.tone,
-        model: opts.model,
-        depth: opts.depth,
-        source: `benchmark/${bucketName}`,
-        onProgress: (cur, total) => process.stderr.write(`\r     Stockfish: ${cur}/${total}`),
-      });
-      process.stderr.write('\n');
-      writeFileSync(outPath, JSON.stringify(result, null, 2));
-      summaries.push({ game_id: gameId, bucket: bucketName, status: 'ok', elapsed_ms: Date.now() - t0, cost_usd: result.metadata.cost_usd });
-      console.log(`     done (${((Date.now() - t0) / 1000).toFixed(1)}s, $${result.metadata.cost_usd.toFixed(4)})`);
-    } catch (e) {
-      process.stderr.write('\n');
-      console.error(`     FAILED: ${e.message}`);
-      summaries.push({ game_id: gameId, bucket: bucketName, status: 'error', error: e.message, elapsed_ms: Date.now() - t0 });
-    }
-  }
-  return summaries;
+    console.log(`  → ${gameId}`);
+    const result = await analyzeGameForBenchmark(pgn, {
+      tone: opts.tone,
+      model: opts.model,
+      depth: opts.depth,
+      source: `benchmark/${bucketName}`,
+    });
+    writeFileSync(outPath, JSON.stringify(result, null, 2));
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+    console.log(`  ✓ ${gameId} (${elapsed}s, $${result.metadata.cost_usd.toFixed(4)})`);
+    return { game_id: gameId, bucket: bucketName, status: 'ok', elapsed_ms: Date.now() - t0, cost_usd: result.metadata.cost_usd };
+  }));
+
+  return results.map((r, i) => {
+    if (r.status === 'fulfilled') return r.value;
+    const gameId = pgnFiles[i].replace(/\.pgn$/, '');
+    console.error(`  ✗ ${gameId}: ${r.reason?.message}`);
+    return { game_id: gameId, bucket: bucketName, status: 'error', error: r.reason?.message };
+  });
 }
 
 async function main() {

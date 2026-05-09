@@ -103,9 +103,12 @@ export async function analyzeFullGame(positions, { onProgress, signal } = {}) {
     if (signal?.aborted) return null;
     const lines = await analyzePosition(positions[i].fen, 10, 1).catch(() => null);
     const r = lines?.[0];
-    const score = r
+    // UCI scores are from the side-to-move perspective. When White just moved
+    // (positions[i].color === 'w'), Black is to move — negate for White's perspective.
+    const rawScore = r
       ? (r.mate != null ? (r.mate > 0 ? 99 : -99) : (r.score ?? 0))
       : evals[evals.length - 1];
+    const score = (r && positions[i].color === 'w') ? -rawScore : rawScore;
     evals.push(score);
     onProgress?.(i, positions.length - 1);
   }

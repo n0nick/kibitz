@@ -114,9 +114,13 @@ export class StockfishEngine {
       if (signal?.aborted) return null;
       const lines = await this.analyzePosition(positions[i].fen, depth, 1).catch(() => null);
       const r = lines?.[0];
-      const score = r
+      // UCI scores are from the side-to-move perspective. When White just moved
+      // (positions[i].color === 'w'), Black is to move and the score is from Black's
+      // view — negate to get a consistent White-perspective eval throughout.
+      const rawScore = r
         ? (r.mate != null ? (r.mate > 0 ? 99 : -99) : (r.score ?? 0))
         : evals[evals.length - 1];
+      const score = (r && positions[i].color === 'w') ? -rawScore : rawScore;
       evals.push(score);
       onProgress?.(i, positions.length - 1);
     }
@@ -131,17 +135,20 @@ export class StockfishEngine {
       if (signal?.aborted) return null;
       const lines = await this.analyzePosition(positions[i].fen, depth, 3).catch(() => null);
       const top = lines?.[0];
-      const score = top
+      // Negate when White just moved (Black to move) to convert to White's perspective.
+      const needsFlip = top && positions[i].color === 'w';
+      const rawScore = top
         ? (top.mate != null ? (top.mate > 0 ? 99 : -99) : (top.score ?? 0))
         : evals[evals.length - 1];
-      evals.push(score);
+      evals.push(needsFlip ? -rawScore : rawScore);
       perPly.push({
         ply: i,
         best_lines: (lines ?? []).map(l => ({
           moves_uci: l.pvUci ?? [],
           moves_san: l.pv ?? [],
-          eval_cp: l.mate != null ? null : Math.round((l.score ?? 0) * 100),
-          mate: l.mate ?? null,
+          // Also convert per-line evals to White's perspective
+          eval_cp: l.mate != null ? null : Math.round((l.score ?? 0) * 100 * (needsFlip ? -1 : 1)),
+          mate: l.mate != null ? (needsFlip ? -l.mate : l.mate) : null,
         })),
       });
       onProgress?.(i, positions.length - 1);
