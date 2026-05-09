@@ -1,22 +1,46 @@
 [Event "KC Internet Grand Prix"]
-[Site "Internet"]
-[Date "2000.??.??"]
+[Site " $4"]
+[Date "2000"]
 [White "Svidler, Peter"]
-[Black "Short, Nigel D"]
-[WhiteElo "2672"]
-[BlackElo "2683"]
+[Black "Short, Nigel"]
+[WhiteELO "2672"]
+[BlackELO "2683"]
 [Result "1-0"]
-[ECO "C12"]
-[Opening "French Defense: MacCutcheon Variation"]
-[Source "ValdemarOrn/Chess - russian_chess.pgn"]
-[Annotator "Sakaev, Konstantin"]
+[Source "Russian Chess"]
+[Annotator "GM Konstantin Sakaev"]
 
-1. e4 e6 2. d4 d5 3. Nc3 Nf6 4. Bg5 Bb4 5. e5 h6 6. Bd2 Bxc3
-7. bxc3 Ne4 8. Qg4 Kf8 9. Be3 Nxc3 10. Bd3 Nc6 11. Nf3 Nb4
-12. Bd2 Nxd3+ 13. cxd3 Na4 14. O-O Bd7 15. Rab1 b6 16. Nh4 Qe8
-17. Rfe1 Kg8 18. Re3 Rh7 19. Rg3 Kh8 20. Qd3 Rc8 21. Ree3 c5
-22. Ref3 cxd4 23. Qxd4 Rc2 24. Qf4 Rxa2 25. h3 Rxd2 26. Qxd2 g5
-27. Qb4 a5 28. Qd4 Qc8 29. Re3 Qc3 30. Qg4 d4 31. Re4 Nc5
-32. Rxd4 a4 33. Nf3 Qc1+ 34. Kh2 h5 35. Qxg5 Qxg5 36. Nxg5 Rg7
-37. Rd6 Rxg5 38. Rxg5 a3 39. d4 a2 40. dxc5 a1=Q 41. Rxd7 Qc1
-42. Rxh5+ Kg7 43. Rh4 bxc5 44. g3 Kf8 45. Rf4 Ke8 46. Rfxf7 1-0
+1. e4 e6 2. d4 d5 3. Nc3 Nf6 4. Bg5 Bb4 5. e5 h6 6. Bd2
+({This is the MacCutcheon variation, rarely used now. It seems that the most unpleasant line for Black is}
+6. Bh4 $5 {an uncommon continuation, as well as all the variant with 4...Bb4} 6...g5 7. Bg3 Ne4 8. Nge2 c5 9. Qd3 $5)
+6... Bxc3 7. bxc3 Ne4 8. Qg4 Kf8 9. Be3
+({Rather rare move, very sharp and risky. The main way is} 9. Bd3 Nxd2 10. Kxd2 c5)
+9...Nxc3 10. Bd3 Nc6 11. Nf3 $5
+({A questionable decision, no wonder that Svidler spent a long time while thinking about this move. The alternative was} 11. a3 {avoiding a trade of the bishop d3, but it would have lost an important tempo})
+11...Nb4 12. Bd2
+(12. O-O Nxd3 13. cxd3 Bd7 (13...h5 14. Qh3) {White can't play} 14. Nh4 $2 (14.Bd2 Na4 {with the same position as in the game}) 14...h5 $1 15. Qh3 g5 $1 $19)
+12...Nxd3+ 13. cxd3 Na4 14. O-O Bd7 15. Rab1
+{Preventing 15...Bb5}
+15...b6 $6
+({This natural move, probably, is a mistake. If} 15...b5 16. Ba5 $1)
+16. Nh4 Qe8 17. Rfe1
+{Another possible way - 17. f4 g6 18. Qh3 with the following 19. g4 and 20. f5, or 19. Be1, 20. Nf3 and 21. Bh4 }
+17...Kg8 18. Re3 Rh7 19. Rg3
+{Threatening is 20. Bxh6}
+19...Kh8 20. Re1 Rc8 $6
+{The idea to carry out c7-c5 is wrong. Necessary was 20...a5 and then b6-b5-b4, developing counterplay. To open any line is good for White}
+21. Ree3 c5 22. Ref3 cxd4
+(22...c4 23. dxc4 dxc4 $5 {deserved attention})
+23. Qxd4 Rc2 24. Qf4 Rxa2 25. h3 Rxd2 $7
+{26. Qxf7 threated}
+26. Qxd2 g5 27. Qb4 $6
+({Better was} 27. Rf6 $1 gxh4 28. Rg4 Qf8 29. Rxh4 h5 30. Qe2 Nc3 31. Qf3 -- 32. Rxh5 $40 $18)
+27...a5 28. Qd4
+(28. Qg4 28...Nc3)
+28...Qc8 29. Re3
+(29. Kh2 $40 29...Qc3 30. Qg4 Qxe5 31. Rxf7 $1 $18)
+29...Qc3 30. Qg4 d4 31. Re4 Nc5 32. Rxd4 a4 33. Nf3
+({Once more} 33. Kh2 $40 $18 {was better})
+33...Qc1+ 34. Kh2 h5 35. Qxg5 Qxg5 36. Nxg5 Rg7 37. Rd6 Rxg5 38. Rxg5 a3 39. d4 a2 $2
+(39...Nb3 {was better} 40. Rxb6 (40. Rxd7 a2 41. Ra7 Na5) 40...a2 41. Ra6 a1=Q 42. Rxa1 Nxa1 43. Rxh5 {White must gradually win. After 39...a2 Black had no chances, his position is lost})
+40. dxc5 a1=Q 41. Rxd7 Qc1 42. Rxh5+ Kg7 43. Rh4 bxc5 44. g3 Kf8 45. Rf4 Ke8 46. Rfxf7
+1-0

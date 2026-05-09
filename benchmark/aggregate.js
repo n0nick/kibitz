@@ -124,6 +124,10 @@ async function main() {
               ...(judge.assertion_results.required_concepts ?? []),
             ].length
           : null,
+        should_flag_passed: judge?.assertion_results?.should_flag_moves
+          ? judge.assertion_results.should_flag_moves.filter(r => r.passed).length
+          : null,
+        should_flag_total: judge?.assertion_results?.should_flag_moves?.length ?? null,
         cost_usd: analysis.metadata.cost_usd,
         latency_ms: analysis.metadata.latency_ms,
         moves_count: analysis.game_metadata.moves_count,

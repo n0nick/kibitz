@@ -1,0 +1,34 @@
+[Event "KC Internet Grand Prix"]
+[Site " $4"]
+[Date "2000"]
+[White "Short, Nigel"]
+[Black "Svidler, Peter"]
+[WhiteELO "2683"]
+[BlackELO "2672"]
+[Result "1/2-1/2"]
+[Source "Russian Chess"]
+[Annotator "GM Konstantin Sakaev"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Be7 6. d4 Na5 7. Be2 d6 8. Qa4+ c6 9. dxe5 dxe5 10. Nxe5 Nf6 11. O-O b5 12. Qc2 O-O
+{Svidler chosed the line where White's chances, in my opinion, are obviously better} (12...Qc7 13. f4 O-O 14. Be3 $16)
+13. a4 $6
+(13. Bf4 $1 13...Bd6 14. Rd1 Qc7 15. Rxd6 Qxd6 16. Ng6 Qc5 17. Nxf8 Qxf8 (17...Kxf8 18. e5 Nd5 19. Qxh7 Nxf4 20. Qh8+ Ke7 21. Qh4+) 18. Nd2 $16 {By now nobody has played 13. Bf4} ) (13. a4)
+(13. Nd2)
+13...Qc7 14. Nf3 a6 15. Bg5 Bg4 $1
+{It is stronger than} (15...Be6 16. Nbd2 Nb7 17. Nd4 Nc5)
+16. Nbd2 Nb7 17. h3 Bh5 18. Rae1 Nc5 19. Nd4 Bg6 $6
+({Looks like a mistake. Necessary was} 19...Bxe2 20. Rxe2 Ne6 (20...h6 21. Bh4 Nh5 $5 22. Bxe7 Qxe7 23. Nxc6 $6 Qf6 24. Nd4 Nf4))
+20. f4 $6
+({Tempting was} 20. Bxf6 $5 Bxf6 21. f4 b4 $2 22. f5 bxc3 23. N2b3)
+20...Ncxe4 21. Nxe4 Bxe4
+{White hardly has a sufficient compensation for a pawn}
+22. Bd3 Bxd3 23. Qxd3 Rfe8 $6
+{I would recommend} (23...Nd5) (23...Bc5 24. Bxf6 gxf6 {one should expect a quick draw. After 23...Rfe8?! White gains better chances})
+24. Re5 $1 Qd7 25. Qf3 $6
+(25. Qe2 Bc5 $1)
+(25. Qg3 $5 {deserved attention})
+25...Nd5 26. axb5 axb5 27. Bxe7 Nxe7 28. Rfe1 Ng6
+(28...Nd5 29. Nxc6 (29. Qg4 Rxe5 30. Qxd7 Rxe1+ $17) 29...Qxc6 30. Rxe8+ Rxe8 31. Rxe8+ Qxe8 32. Qxd5 {with a draw})
+29. Rxe8+ Rxe8 30. Rxe8+ Qxe8 31. Nxc6 Nh4
+32. Qd5 (32. Qg4 Qxc6 33. Qxh4 f6 34. Qg3) Qe3+ 33. Kh1 Qc1+
+1/2-1/2

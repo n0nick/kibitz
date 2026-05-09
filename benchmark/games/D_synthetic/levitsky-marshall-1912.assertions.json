@@ -1,11 +1,17 @@
 {
   "game": "Levitsky vs Marshall, Breslau 1912",
   "pattern": "quiet_best_move",
+  "primary_test": "Does Kibitz correctly classify 23...Qg3!! as brilliant and explain why every capture loses (overloaded defenses), not just call it 'a strong queen move'?",
   "must_flag_moves": [
-    {"ply": 45, "expected_classification": "brilliant", "note": "23...Qg3!! (ply 45, Black's 23rd move) — the legendary queen sacrifice that wins by force regardless of White's reply"}
+    {"ply": 46, "expected_classification": "brilliant", "note": "23...Qg3!! — Black's 23rd move (2*23=46). The legendary queen sacrifice: if hxg3 Ne2#; if fxg3 Ne2+ wins queen; if Qxg3 Ne2+ forks. White resigned."}
   ],
   "must_not_flag_moves": [],
-  "required_concepts": ["queen sacrifice", "mating attack", "deflection"],
+  "should_flag_moves": [],
+  "required_concepts": [
+    ["queen sacrifice", "sacrifices the queen"],
+    ["mating attack", "checkmate", "forced mate"],
+    ["overload", "overloaded", "deflection", "every capture loses"]
+  ],
   "forbidden_claims": [
     "23...Qg3 is a mistake",
     "White can capture the queen safely",

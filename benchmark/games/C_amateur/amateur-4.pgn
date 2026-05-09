@@ -1,0 +1,15 @@
+[Event "rated rapid game"]
+[Site "https://lichess.org"]
+[Date "2026.05.08"]
+[Round "-"]
+[White "White"]
+[Black "Black"]
+[Result "0-1"]
+[WhiteElo "1626"]
+[BlackElo "1620"]
+[Variant "Standard"]
+[TimeControl "600+3"]
+[ECO "B21"]
+[Termination "Normal"]
+
+1. e4 c5 2. d4 cxd4 3. Qxd4 Nf6 4. Nc3 Nc6 5. Qd1 e5 6. Bg5 Be7 7. Nf3 O-O 8. Bxf6 Bxf6 9. Qd2 h6 10. O-O-O Nd4 11. Be2 Nxf3 12. Bxf3 Bg5 13. Kb1 Bxd2 14. Rxd2 d6 15. Rhd1 Qb6 16. Rxd6 Qxf2 17. R6d2 Qb6 18. Nd5 Qc5 19. Nc3 a5 20. Rd5 Qc7 21. Nb5 Qc6 22. Na3 Be6 23. Rd6 Qc7 24. Nb5 Qc5 25. a4 Rac8 26. Nc3 Qb4 27. R6d3 Rxc3 28. Rxc3 Qxa4 29. Ra3 Qc6 30. Rd6 Qb5 31. Rdd3 Rc8 32. Be2 Qb4 33. Rd1 Qxe4 34. Bd3 Qxg2 35. Rxa5 b6 36. Rxe5 Ra8 37. Re2 Ba2+ 38. Kc1 Qg5+ 39. Rdd2 Bc4 40. b3 Bxd3 41. cxd3 Ra1+ 42. Kc2 Ra2+ 43. Kc3 Rxd2 44. Rxd2 0-1

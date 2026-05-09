@@ -1,14 +1,23 @@
 {
   "game": "Spassky vs Fischer, WCC 1972 Game 11",
   "pattern": "poisoned_pawn",
+  "primary_test": "Does Kibitz understand that 14.Nb1!? is a deep prepared refutation of the Poisoned Pawn, and that the real mistake was Fischer's 15...d5, not the pawn grab itself?",
   "must_flag_moves": [
-    {"ply": 15, "expected_classification": "inaccuracy", "note": "8...Qxb2 grabs the poisoned pawn — ply 15 (Black's 8th move). It's a known theoretical try but Spassky had deep preparation."},
-    {"ply": 27, "expected_classification": "brilliant", "note": "14.Nb1!? — ply 27 (White's 14th move). The prepared retreat is the key novelty."}
+    {"ply": 27, "expected_classification": "brilliant", "note": "14.Nb1 — White's 14th move (2*14-1=27). The seemingly passive prepared retreat is the key refutation of the Poisoned Pawn."},
+    {"ply": 30, "expected_classification": "mistake", "note": "15...d5 — Black's 15th move (2*15=30). The actual turning point: opens the center when Black's queen is offside and pieces are uncoordinated."}
   ],
   "must_not_flag_moves": [
-    {"ply": 27, "note": "14.Nb1 should NOT be flagged as a mistake or blunder — it looks passive but is the refutation"}
+    {"ply": 27, "forbidden_classifications": ["mistake", "blunder", "inaccuracy"], "note": "14.Nb1 should NOT be classified as a mistake/blunder/inaccuracy — it looks passive but is the brilliant prepared refutation."},
+    {"ply": 16, "forbidden_classifications": ["blunder"], "note": "8...Qxb2 was Fischer's pet theoretical line, not a blunder. Calling it a blunder misreads the history."}
   ],
-  "required_concepts": ["poisoned pawn", "opening preparation", "prophylaxis"],
+  "should_flag_moves": [
+    {"ply": 16, "expected_classification": "inaccuracy", "note": "8...Qxb2 — Black's 8th move (2*8=16). Debatable: theoretically known but Spassky had deep preparation. Soft requirement."}
+  ],
+  "required_concepts": [
+    ["poisoned pawn", "poisoned pawn variation"],
+    ["opening preparation", "prepared novelty", "home preparation"],
+    ["prophylaxis", "quiet move"]
+  ],
   "forbidden_claims": [
     "8...Qxb2 is a simple blunder",
     "14.Nb1 loses time",

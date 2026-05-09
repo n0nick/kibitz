@@ -102,14 +102,15 @@ Then list:
 
   if (hasAssertions) {
     prompt += `
-ASSERTIONS FOR THIS POSITION:
+ASSERTIONS FOR THIS POSITION (primary test: "${assertions.primary_test ?? ''}"):
 ${JSON.stringify(assertions, null, 2)}
 
 In addition to standard scoring, verify each assertion:
-- must_flag_moves: did the AI flag it with the expected classification?
-- must_not_flag_moves: did the AI correctly NOT flag it?
-- required_concepts: does the commentary mention or explain the concept?
-- forbidden_claims: does the AI commentary make this (incorrect) claim?
+- must_flag_moves: did the AI flag it with the expected_classification exactly?
+- must_not_flag_moves: did the AI correctly NOT give it any forbidden_classifications? (if forbidden_classifications is empty, check it wasn't flagged at all)
+- should_flag_moves: soft check — did the AI flag it? (failure here does not fail the game, just note it)
+- required_concepts: each entry is an ARRAY of synonym strings. The test passes if the commentary contains ANY ONE term from that array. Example: ["zugzwang","zug"] passes if either word appears. Treat each outer array as one concept group and check independently.
+- forbidden_claims: does the AI commentary make this (incorrect) claim anywhere?
 `;
   }
 
@@ -134,10 +135,11 @@ Output strictly as JSON, no preamble:
   "missed": [],
   "false_flags": []${hasAssertions ? `,
   "assertion_results": {
-    "must_flag_moves": [],
-    "must_not_flag_moves": [],
-    "required_concepts": [],
-    "forbidden_claims": []
+    "must_flag_moves": [{"ply": <n>, "passed": <bool>, "actual_classification": "<string or null>"}],
+    "must_not_flag_moves": [{"ply": <n>, "passed": <bool>, "actual_classification": "<string or null>"}],
+    "should_flag_moves": [{"ply": <n>, "passed": <bool>, "actual_classification": "<string or null>"}],
+    "required_concepts": [{"concept": "<concept or synonym group>", "found": <bool>, "matched_term": "<term actually used or null>"}],
+    "forbidden_claims": [{"claim": "<claim>", "made": <bool>}]
   }` : ''}
 }`;
 

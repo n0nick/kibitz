@@ -1,11 +1,19 @@
 {
   "game": "Colle vs O'Hanlon, Nice 1930",
   "pattern": "greek_gift",
+  "primary_test": "Does Kibitz correctly identify 12.Bxh7+ as a winning Greek Gift sacrifice and describe the king walk?",
   "must_flag_moves": [
-    {"ply": 23, "expected_classification": "brilliant", "note": "12.Bxh7+ is the Greek Gift sacrifice — ply 23 (White's 12th move)"}
+    {"ply": 23, "expected_classification": "brilliant", "note": "12.Bxh7+ — White's 12th move (2*12-1=23). The canonical Greek Gift bishop sacrifice."}
   ],
   "must_not_flag_moves": [],
-  "required_concepts": ["greek gift", "king walk", "sacrifice"],
+  "should_flag_moves": [
+    {"ply": 25, "expected_classification": "brilliant", "note": "13.Ng5+ — White's 13th move (ply 25). Drives the king walk after the sacrifice."}
+  ],
+  "required_concepts": [
+    ["greek gift", "bishop sacrifice on h7"],
+    ["king walk", "king march", "exposed king"],
+    ["sacrifice", "attack"]
+  ],
   "forbidden_claims": [
     "Bxh7 loses material",
     "the sacrifice is unsound",

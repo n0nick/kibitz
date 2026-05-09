@@ -7,38 +7,44 @@ No moves were reconstructed from memory.
 
 | File | Game | Source | Verification |
 |------|------|--------|-------------|
-| `A_canonical/opera-game.pgn` | Morphy vs Duke of Brunswick & Count Isouard, Paris 1858 | Wikipedia: https://en.wikipedia.org/wiki/Opera_Game | Moves match App.jsx DEMO_PGN exactly; also verified against Wikipedia article |
+| `A_canonical/opera-game.pgn` | Morphy vs Duke of Brunswick & Count Isouard, Paris 1858 | Wikipedia: https://en.wikipedia.org/wiki/Opera_Game and Lichess study: https://lichess.org/study/xAo78qLb/truC6WoM | Verified move-for-move against Lichess study API export (https://lichess.org/api/study/xAo78qLb/truC6WoM.pgn); all 17 moves match exactly |
 | `A_canonical/fischer-spassky-1972-g6.pgn` | Fischer vs Spassky, World Championship 1972, Game 6 | Wikipedia: https://en.wikipedia.org/wiki/World_Chess_Championship_1972 (Game 6 section) | Fetched and verified move-for-move against Wikipedia; 41 moves ending Qf4 1-0; note 40.Bc4+ is a discovered check |
 | `A_canonical/kasparov-topalov-1999.pgn` | Kasparov vs Topalov, Wijk aan Zee 1999 | Wikipedia: https://en.wikipedia.org/wiki/Kasparov%27s_Immortal | Fetched and verified move-for-move against Wikipedia; 44 moves ending Qa7 1-0 |
 
 ## Bucket B — Titled-player annotated
 
-All five games sourced from the ValdemarOrn/Chess GitHub repository:
+All four games sourced from the ValdemarOrn/Chess GitHub repository:
 https://github.com/ValdemarOrn/Chess/tree/master/Annotated%20Games
 
-The annotated reference versions (in `references/B_titled/`) were fetched from:
+Raw file used:
 - `https://raw.githubusercontent.com/ValdemarOrn/Chess/master/Annotated%20Games/russian_chess.pgn`
-- `https://raw.githubusercontent.com/ValdemarOrn/Chess/master/Annotated%20Games/linares_2002.pgn`
 
-| File | Game | Source file | Annotator |
-|------|------|-------------|-----------|
-| `B_titled/svidler-shirov.pgn` | Svidler vs Shirov (year unknown) | `russian_chess.pgn` | GM Peter Svidler (self-annotation) |
-| `B_titled/sakaev-mrva-istanbul-2000.pgn` | Sakaev vs Mrva, Istanbul Olympiad 2000 | `russian_chess.pgn` | GM Konstantin Sakaev (self-annotation) |
-| `B_titled/svidler-short-2000.pgn` | Svidler vs Short, KC Internet Grand Prix 2000 | `russian_chess.pgn` | GM Konstantin Sakaev |
-| `B_titled/ivanchuk-adams-linares-2002.pgn` | Ivanchuk vs Adams, SuperGM Linares 2002 Rd 7 | `linares_2002.pgn` | Mark Hathaway |
-| `B_titled/vallejo-ponomariov-linares-2002.pgn` | Vallejo Pons vs Ponomariov, SuperGM Linares 2002 Rd 5 | `linares_2002.pgn` | Mark Hathaway |
+The annotated reference versions (in `references/B_titled/`) were extracted verbatim from this file and contain all `{}` comments, `()` variations, and NAGs exactly as written by the annotating GM.
 
-Note on annotator titles: Svidler and Sakaev hold the GM title. Mark Hathaway (Linares annotator) is not confirmed titled — his annotations are prose-heavy and substantive but the `[Annotator]` tag does not include a title prefix. If strict titled-player sourcing is required for Bucket B, consider replacing the two Linares games with additional Sakaev-annotated games from `russian_chess.pgn`.
+The clean `games/B_titled/` PGNs were verified move-for-move against their references using a PGN tokenizer (stripping headers/comments/variations/NAGs). All 4 games pass: 73, 85, 91, 66 plies respectively. One error was caught and corrected in this process: `svidler-short-2000` had `20. Qd3` where the source has `20. Re1`.
+
+| File | Game | Annotator |
+|------|------|-----------|
+| `B_titled/svidler-shirov.pgn` | Svidler vs Shirov, Linares 1998 | GM Peter Svidler (self-annotation) |
+| `B_titled/sakaev-mrva-istanbul-2000.pgn` | Sakaev vs Mrva, Istanbul Olympiad 2000 | GM Konstantin Sakaev (self-annotation) |
+| `B_titled/svidler-short-2000.pgn` | Svidler vs Short, KC Internet Grand Prix 2000 | GM Konstantin Sakaev |
+| `B_titled/short-svidler-2000.pgn` | Short vs Svidler, KC Internet Grand Prix 2000 | GM Konstantin Sakaev |
+
+Svidler-Shirov event identification: The file's `[Event ""]` tag is blank, but Svidler's annotation confirms Linares 1998 — he writes "Rounds 7&8 Shirov faced the position after 7.a4 against Kasparov & Anand" in a double round-robin of 7 players, and Svidler was "the last one to play Shirov with White." This matches Linares 1998 (February–March 1998, participants: Anand, Shirov, Kramnik, Kasparov, Svidler, Ivanchuk, Topalov).
 
 ## Bucket C — Amateur
 
-**Not yet populated.** To populate:
-1. Add 3 of your own Lichess games (mix of time controls):
-   `curl "https://lichess.org/api/games/user/<your-username>?max=20&rated=true" -H "Accept: application/x-chess-pgn" > my_games.pgn`
-2. Add 2 random 1500–1800 rated rapid games from Lichess:
-   `curl "https://lichess.org/api/games/user/<any-public-1500-1800-user>?max=5&rated=true&perfType=rapid" -H "Accept: application/x-chess-pgn"`
+All games downloaded from Lichess on 2026-05-08. Player names, game IDs, and site URLs are anonymized in the PGN files (player names replaced with "White"/"Black"; Site tag generalized to "https://lichess.org"). Full provenance kept here only. No reference annotations (judged against Stockfish only).
 
-No reference annotations needed for Bucket C (judged against Stockfish only).
+| File | WhiteElo | BlackElo | Result | Plies | Lichess URL |
+|------|----------|----------|--------|-------|-------------|
+| `C_amateur/amateur-1.pgn` (owner, vs bot) | 1500 | 1589 | 0-1 | 56 | https://lichess.org/A5z9A0Dd |
+| `C_amateur/amateur-2.pgn` | 1649 | 1643 | 1-0 | 111 | https://lichess.org/XtHbKnrE |
+| `C_amateur/amateur-3.pgn` | 1792 | 1726 | 1-0 | 65 | https://lichess.org/1tnbrnVF |
+| `C_amateur/amateur-4.pgn` | 1626 | 1620 | 0-1 | 87 | https://lichess.org/RKL1Xojv |
+| `C_amateur/amateur-5.pgn` | 1642 | 1687 | 0-1 | 58 | https://lichess.org/8YNesM1C |
+
+Note: amateur-1 is the owner's game against Lichess Maia bot — not a true human-vs-human game. Maia produces a different error distribution than a real 1500-rated opponent. Don't draw conclusions from this game's score in isolation; replace with a human-opponent game when available.
 
 ## Bucket D — Adversarial (real games only)
 

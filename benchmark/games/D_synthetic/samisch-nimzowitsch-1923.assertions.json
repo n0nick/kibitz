@@ -1,11 +1,19 @@
 {
   "game": "Sämisch vs Nimzowitsch, Copenhagen 1923",
   "pattern": "zugzwang",
+  "primary_test": "Does Kibitz correctly identify 25...h6!! as the zugzwang-creating move and explain the paralysis mechanism, not just call it a strong move?",
   "must_flag_moves": [
-    {"ply": 49, "expected_classification": "brilliant", "note": "25...h6!! (ply 49, Black's 25th move) — the quiet pawn move that creates complete zugzwang"}
+    {"ply": 50, "expected_classification": "brilliant", "note": "25...h6!! — Black's 25th move (2*25=50). The quiet pawn move that creates complete zugzwang; White resigned."}
   ],
   "must_not_flag_moves": [],
-  "required_concepts": ["zugzwang", "restriction", "quiet move"],
+  "should_flag_moves": [
+    {"ply": 42, "expected_classification": "brilliant", "note": "21...Rxf2 — Black's 21st move (2*21=42). The rook sacrifice that sets up the zugzwang. Kibitz should recognize this as the start of the winning sequence, not just h6."}
+  ],
+  "required_concepts": [
+    ["zugzwang", "zug"],
+    ["paralysis", "restriction", "no useful moves", "every move loses"],
+    ["quiet move", "prophylaxis", "subtle move"]
+  ],
   "forbidden_claims": [
     "25...h6 doesn't change the evaluation much",
     "White has many good replies after h6",

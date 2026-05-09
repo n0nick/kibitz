@@ -1,15 +1,24 @@
 {
   "game": "Kramnik vs Kasparov, BrainGames WCh 2000 Game 4",
   "pattern": "fortress",
-  "must_flag_moves": [],
-  "must_not_flag_moves": [
-    {"ply": 111, "note": "55...Ra5 (ply 111) — Kasparov's fortress defense should NOT be classified as a blunder despite engine eval favoring White"},
-    {"ply": 113, "note": "56...Ra5 rook moves holding the fortress"}
+  "primary_test": "Does Kibitz recognize Kasparov's fortress defense in the rook endgame, correctly scoring it as a draw rather than a win for White?",
+  "must_flag_moves": [
+    {"ply": 116, "expected_classification": "mistake", "note": "58...Rh1 — Black's 58th move (2*58=116). The error that allowed a win — Ra5 was the correct fortress move."},
+    {"ply": 117, "expected_classification": "mistake", "note": "59.Kb2 — White's 59th move (2*59-1=117). Kramnik misses 59.Rg8!! which was winning."}
   ],
-  "required_concepts": ["fortress", "drawing technique", "rook endgame"],
+  "must_not_flag_moves": [
+    {"ply": 110, "forbidden_classifications": ["blunder", "mistake"], "note": "55...Kb6 — Black's 55th move (2*55=110). King blockades the a6 pawn — correct fortress play, not a mistake."},
+    {"ply": 112, "forbidden_classifications": ["blunder", "mistake"], "note": "56...Ra5 — Black's 56th move (2*56=112). Rook anchors on a5 to stop the passed pawn — the key fortress move, not a mistake."}
+  ],
+  "should_flag_moves": [],
+  "required_concepts": [
+    ["fortress", "drawing fortress"],
+    ["drawing technique", "rook endgame draw"],
+    ["rook endgame", "endgame"]
+  ],
   "forbidden_claims": [
-    "White is winning easily",
-    "Black should resign",
-    "the position is completely lost for Black"
+    "the final position is winning for White",
+    "Black cannot hold the draw",
+    "Black should resign"
   ]
 }
