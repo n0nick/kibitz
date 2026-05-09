@@ -56,9 +56,22 @@ function buildJudgePrompt(analysis, referencePgn, assertions) {
     ?.map(p => `Ply ${p.ply}: ${p.best_lines.slice(0, 2).map(l => `[${l.eval_cp != null ? (l.eval_cp / 100).toFixed(2) : `M${l.mate}`}] ${l.moves_san.slice(0, 5).join(' ')}`).join(' | ')}`)
     ?.join('\n') ?? 'Not available';
 
-  const kibitzMoments = analysis.key_moments.map(m =>
-    `Ply ${m.ply} (${m.move_san}): ${m.classification} | eval ${(m.eval_before_cp / 100).toFixed(2)}→${(m.eval_after_cp / 100).toFixed(2)}\n  Explanation: ${m.explanation}\n  Claimed lines: ${JSON.stringify(m.claimed_lines)}\n  Alternatives: ${JSON.stringify(m.alternatives)}`
-  ).join('\n\n');
+  const kibitzMoments = analysis.key_moments.map(m => {
+    const fmtAlt = a => a.san
+      ? `${a.san} (${a.eval_cp != null ? (a.eval_cp / 100).toFixed(2) : (a.mate > 0 ? '+M' : '-M')})`
+      : null;
+    const altStr = m.top_alternatives?.length
+      ? m.top_alternatives.map(fmtAlt).filter(Boolean).join(', ')
+      : 'none';
+    const refStr = m.refutation_pv?.length
+      ? m.refutation_pv.slice(0, 5).join(' ')
+      : 'none';
+    return `Ply ${m.ply} (${m.move_san}): ${m.classification} | eval ${(m.eval_before_cp / 100).toFixed(2)}→${(m.eval_after_cp / 100).toFixed(2)}
+  Explanation: ${m.explanation}
+  Claimed lines: ${JSON.stringify(m.claimed_lines)}
+  Engine alternatives (what to play INSTEAD of ${m.move_san}, from position BEFORE this move): ${altStr}
+  Engine refutation (best play AFTER ${m.move_san} was played): ${refStr}`;
+  }).join('\n\n');
 
   let prompt = `You are evaluating AI-generated chess commentary against Stockfish ground truth${hasReference ? ' and human expert annotations' : ''}. Be rigorous and specific. Cite move numbers (plies) in every justification.
 
@@ -86,7 +99,12 @@ Score the AI commentary on five dimensions, 1–5 each. For each dimension, give
 
 1. **Move selection**: Did the AI flag approximately the same critical moments${hasReference ? ' the human did' : ' that Stockfish considers critical'}? Extra moments are fine if substantive. Missing key moments is bad.
 
-2. **Tactical accuracy**: Compare every claimed tactical line in the AI output (the claimed_lines field and any tactical claims in explanation) against the Stockfish lines. Flag any claim that contains illegal moves, doesn't actually achieve what it claims, or contradicts the engine without justification. Score 1 if any hallucinated tactics are present. Score 5 only if every line is verified.
+2. **Tactical accuracy**: The AI uses a two-position engine structure — read carefully before flagging hallucinations:
+   - **"Engine alternatives"** = moves from the position BEFORE the played move (what should have been played instead). A move mentioned in the explanation as a better option is valid if it appears in the "Engine alternatives" list.
+   - **"Engine refutation"** = moves from the position AFTER the played move (opponent's best response). Claimed lines labeled "refutation" should use moves from this list.
+   - Do NOT flag a move as hallucinated just because it isn't in the refutation — it may be a valid engine alternative. Always cross-check both lists before flagging.
+   - Flag as hallucination ONLY: moves in claimed_lines or explanations that appear in NEITHER the alternatives NOR the refutation list, AND are not the played move itself.
+   - Also flag: claims about consequences (e.g. "gains material", "delivers mate") that are contradicted by the engine lines provided.
 
 3. **Causal explanation**: Does the AI explain WHY moves are good or bad, not just label them? Generic ("this loses material") scores low; mechanism-specific ("allows Bxf6 shattering the kingside") scores high.
 

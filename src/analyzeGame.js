@@ -1,3 +1,5 @@
+import { Chess } from 'chess.js';
+
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
@@ -7,7 +9,7 @@ export const TONES = [
   { value: "advanced",     label: "Advanced",      desc: "Experienced player — use standard chess terminology freely" },
 ];
 
-function toneDesc(tone) {
+export function toneDesc(tone) {
   return TONES.find((t) => t.value === tone)?.desc ?? TONES[0].desc;
 }
 
@@ -40,13 +42,100 @@ async function callApi(messages, apiKey, { system, maxTokens = 1024, model = DEF
   return { text: data.content[0].text, usage: data.usage };
 }
 
-const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation and reason:
+export const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation and reason:
 - Square reference: [[e6]]
 - Piece on a square: [[Ng5|g5]]
 - Move (MUST include explicit from–to): [[Nxe6|g5-e6]]
 - NEVER use [[SAN]] without a pipe — always provide |from-to
 - Use lowercase algebraic squares (a1–h8)
 - Include 2–3 annotations per explanation; annotate every key square and move`;
+
+// Regex for piece moves and pawn captures — deliberately excludes bare pawn
+// advances (e4, d5) which are too ambiguous with square references in prose.
+const PROSE_SAN_RE = /\b(?:[KQRBN][a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h]x[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?[+#]?)\b/g;
+
+export function isLegalLine(movesSan, startFen) {
+  if (!movesSan || movesSan.length === 0 || !startFen) return false;
+  try {
+    const chess = new Chess(startFen);
+    for (const san of movesSan) {
+      if (!chess.move(san)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Extracts move SANs mentioned in text, covering both [[SAN|from-to]] annotations
+// and plain prose piece/capture moves. Strips check/mate suffixes for comparison.
+export function extractMentionedSANs(text) {
+  if (!text) return new Set();
+  const mentioned = new Set();
+  // Move annotations only: [[SAN|a1-b2]] (second part has a hyphen = from-to)
+  const annotRE = /\[\[([^\]|]+)\|([a-h][1-8])-([a-h][1-8])\]\]/g;
+  let m;
+  while ((m = annotRE.exec(text)) !== null) mentioned.add(m[1].replace(/[+#]$/, ''));
+  // Plain prose after stripping all annotations
+  const stripped = text.replace(/\[\[[^\]]*\]\]/g, ' ');
+  PROSE_SAN_RE.lastIndex = 0;
+  while ((m = PROSE_SAN_RE.exec(stripped)) !== null) mentioned.add(m[0].replace(/[+#]$/, ''));
+  return mentioned;
+}
+
+// Drops sentences whose move mentions aren't in the engine-grounded allowed set.
+// Returns null if no sentences survive (caller should drop the moment).
+export function scrubExplanation(text, allowedSANs) {
+  if (!text || allowedSANs.size === 0) return text;
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const valid = sentences.filter(s => {
+    const mentioned = extractMentionedSANs(s);
+    return [...mentioned].every(san => allowedSANs.has(san));
+  });
+  return valid.length > 0 ? valid.join(' ').trim() : null;
+}
+
+const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
+
+// Formats one moment entry for the prompt, including engine alternatives and
+// refutation when momentEngineData is provided (v1.2 architecture).
+export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = []) {
+  const fmt = v => v >= 99 ? 'M' : v <= -99 ? '-M' : v.toFixed(1);
+  const before = evals[m.moveIdx - 1] ?? 0;
+  const after = evals[m.moveIdx];
+  const delta = after - before;
+  const side = m.player === 'white' ? 'White' : 'Black';
+
+  let entry = `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}) [${side}]: ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? '+' : ''}${delta.toFixed(1)})`;
+
+  const engineData = momentEngineData[m.moveIdx];
+
+  if (engineData?.top_alternatives?.length > 0) {
+    entry += '\n  Engine alternatives (what to play instead):';
+    engineData.top_alternatives.forEach((alt, i) => {
+      if (!alt.san) return;
+      const ev = alt.mate != null ? (alt.mate > 0 ? '+M' : '-M') : fmtCp(alt.eval_cp);
+      const pv = alt.pv_san?.slice(1, 4).join(' ');
+      entry += `\n    ${i + 1}. ${alt.san} (${ev})${pv ? ` — continuation: ${pv}` : ''}`;
+    });
+  }
+
+  if (engineData?.refutation_pv?.length > 0) {
+    entry += `\n  Engine refutation after ${m.notation}: ${engineData.refutation_pv.slice(0, 4).join(' ')}`;
+  } else {
+    const plyEntry = perPly.find(p => p.ply === m.moveIdx);
+    const engineLines = plyEntry?.best_lines?.slice(0, 2) ?? [];
+    if (engineLines.length > 0) {
+      entry += '\n  Engine lines after move:';
+      engineLines.forEach((l, i) => {
+        const ev = l.mate != null ? (l.mate > 0 ? '+M' : '-M') : fmtCp(l.eval_cp);
+        entry += `\n    ${i + 1}. ${l.moves_san.slice(0, 4).join(' ')} (${ev})`;
+      });
+    }
+  }
+
+  return entry;
+}
 
 export const MAX_MOMENTS = 12;
 
@@ -72,20 +161,41 @@ export function selectMoments(moments, evals) {
   return [...selected].sort((a, b) => a.moveIdx - b.moveIdx);
 }
 
-export function buildPrompt(pgn, moments, summary, evals, tone) {
+// When momentEngineData is provided, produces the v1.2 engine-grounded prompt
+// (engine alternatives listed per moment, LLM forbidden from inventing moves).
+// Falls back to v1.1 format when called with no engine data (e.g. promptBuilder override).
+export function buildPrompt(pgn, moments, summary, evals, tone, { perPly = [], positions = [], momentEngineData = {} } = {}) {
+  const hasEngineData = Object.keys(momentEngineData).length > 0;
   const cleanPgn = pgn.replace(/\{[^}]*\}/g, "").replace(/\s+/g, " ").trim();
-  const fmt = (v) => (v >= 99 ? "M" : v <= -99 ? "-M" : v.toFixed(1));
   const topMoments = selectMoments(moments, evals);
-  const momentsList = topMoments
-    .map((m) => {
-      const before = evals[m.moveIdx - 1] ?? 0;
-      const after = evals[m.moveIdx];
-      const delta = after - before;
-      return `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}): ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? "+" : ""}${delta.toFixed(1)})`;
-    })
-    .join("\n");
 
-  return `Analyze this chess game. Tone: ${toneDesc(tone)}
+  const momentsList = topMoments.map(m => {
+    if (hasEngineData) return formatMomentEntry(m, evals, momentEngineData, perPly);
+    const fmt = v => v >= 99 ? 'M' : v <= -99 ? '-M' : v.toFixed(1);
+    const before = evals[m.moveIdx - 1] ?? 0;
+    const after = evals[m.moveIdx];
+    const delta = after - before;
+    return `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}): ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? "+" : ""}${delta.toFixed(1)})`;
+  }).join("\n");
+
+  const systemLine = hasEngineData
+    ? "You are a chess coach explaining specific moments in a game. You are NOT a chess engine. All chess truth comes from the engine output provided below. You translate engine analysis into coaching prose.\n\n"
+    : "";
+
+  const evalHeader = hasEngineData
+    ? "Key moments (eval in pawns, positive = White advantage; each entry names the side that just moved):"
+    : "Key moments (eval in pawns, positive = white advantage):";
+
+  const betterMovesRule = hasEngineData
+    ? "betterMoves: use ONLY moves appearing verbatim in the engine alternatives above. Empty [] if none apply."
+    : "betterMoves only for inaccuracy/mistake/blunder ([] for great/brilliant), max 2";
+
+  const extraRules = hasEngineData
+    ? `\n- NEVER name a move anywhere in your response unless it appears verbatim in the engine alternatives or refutation lines provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
+- Do not make claims about tactical motifs (pins, forks, skewers, discovered attacks) unless the geometry is visible in the provided engine lines.`
+    : "";
+
+  return `${systemLine}Analyze this chess game. Tone: ${toneDesc(tone)}
 
 White: ${summary.white} | Black: ${summary.black} | Result: ${summary.result}
 Opening: ${summary.opening ?? "Unknown"} | Event: ${summary.event}
@@ -93,7 +203,7 @@ Opening: ${summary.opening ?? "Unknown"} | Event: ${summary.event}
 PGN:
 ${cleanPgn}
 
-Key moments (eval in pawns, positive = white advantage):
+${evalHeader}
 ${momentsList}
 
 Return ONLY valid JSON, no markdown:
@@ -111,7 +221,7 @@ Return ONLY valid JSON, no markdown:
 }
 
 Rules:
-- betterMoves only for inaccuracy/mistake/blunder ([] for great/brilliant), max 2
+- ${betterMovesRule}${extraRules}
 - Output exactly the moveIdx values listed above, no more, no less
 - ${ANNOTATION_RULES}`;
 }

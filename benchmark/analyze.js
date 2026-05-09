@@ -3,65 +3,29 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { parseArgs } from 'util';
 import { fileURLToPath } from 'url';
-import { Chess } from 'chess.js';
 import { parseGame, reclassifyWithEvals } from '../src/parseGame.js';
-import { TONES, selectMoments, DEFAULT_MODEL, analyzeGameWithUsage } from '../src/analyzeGame.js';
+import { selectMoments, DEFAULT_MODEL, analyzeGameWithUsage, toneDesc, ANNOTATION_RULES, isLegalLine, extractMentionedSANs, scrubExplanation, formatMomentEntry } from '../src/analyzeGame.js';
 import { mergeAnalysis } from '../src/pipeline.js';
 import { StockfishEngine } from './stockfish-node.js';
 
-export const PROMPT_VERSION = 'v1.1';
+export const PROMPT_VERSION = 'v1.2';
 export const STOCKFISH_PATH = process.env.STOCKFISH_PATH ?? '/opt/homebrew/bin/stockfish';
 
-const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation and reason:
-- Square reference: [[e6]]
-- Piece on a square: [[Ng5|g5]]
-- Move (MUST include explicit from–to): [[Nxe6|g5-e6]]
-- NEVER use [[SAN]] without a pipe — always provide |from-to
-- Use lowercase algebraic squares (a1–h8)
-- Include 2–3 annotations per explanation; annotate every key square and move`;
-
-function toneDesc(tone) {
-  return TONES.find(t => t.value === tone)?.desc ?? TONES[0].desc;
-}
-
-export function buildBenchmarkPrompt(pgn, moments, summary, evals, tone, perPly = [], positions = []) {
+export function buildBenchmarkPrompt(pgn, moments, summary, evals, tone, perPly = [], positions = [], momentEngineData = {}) {
   const cleanPgn = pgn.replace(/\{[^}]*\}/g, '').replace(/\s+/g, ' ').trim();
-  const fmt = v => v >= 99 ? 'M' : v <= -99 ? '-M' : v.toFixed(1);
-  const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
   const topMoments = selectMoments(moments, evals);
-  const momentsList = topMoments.map(m => {
-    const before = evals[m.moveIdx - 1] ?? 0;
-    const after = evals[m.moveIdx];
-    const delta = after - before;
-    const side = m.player === 'white' ? 'White' : 'Black';
+  const momentsList = topMoments.map(m => formatMomentEntry(m, evals, momentEngineData, perPly)).join('\n');
 
-    let entry = `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}) [${side}]: ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? '+' : ''}${delta.toFixed(1)})`;
+  return `You are a chess coach explaining specific moments in a game. You are NOT a chess engine. All chess truth comes from the engine output provided below. You translate engine analysis into coaching prose.
 
-    const fenAfter = positions[m.moveIdx]?.fen;
-    if (fenAfter) entry += `\n  FEN after move: ${fenAfter}`;
-
-    const plyEntry = perPly.find(p => p.ply === m.moveIdx);
-    const engineLines = plyEntry?.best_lines?.slice(0, 3) ?? [];
-    if (engineLines.length > 0) {
-      entry += '\n  Engine best lines from this position:';
-      engineLines.forEach((l, i) => {
-        const ev = l.mate != null ? (l.mate > 0 ? '+M' : '-M') : fmtCp(l.eval_cp);
-        entry += `\n    ${i + 1}. ${l.moves_san.slice(0, 4).join(' ')} (${ev})`;
-      });
-    }
-
-    return entry;
-  }).join('\n');
-
-  return `Analyze this chess game. Tone: ${toneDesc(tone)}
-
+Tone: ${toneDesc(tone)}
 White: ${summary.white} | Black: ${summary.black} | Result: ${summary.result}
 Opening: ${summary.opening ?? 'Unknown'} | Event: ${summary.event}
 
 PGN:
 ${cleanPgn}
 
-Key moments (eval in pawns, positive = White advantage; each entry names the side that just moved — an eval change that benefits that side is a strong move, one that hurts them is an error):
+Key moments (eval in pawns, positive = White advantage; each entry names the side that just moved):
 ${momentsList}
 
 Return ONLY valid JSON, no markdown:
@@ -72,7 +36,6 @@ Return ONLY valid JSON, no markdown:
     {
       "moveIdx": <number>,
       "explanation": "1-2 sentences with [[square/piece/move]] annotations: what happened and why it matters",
-      "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
       "claimed_lines": [
         {
           "label": "refutation|winning-plan|defense",
@@ -86,24 +49,11 @@ Return ONLY valid JSON, no markdown:
 }
 
 Rules:
-- betterMoves only for inaccuracy/mistake/blunder ([] for great/brilliant), max 2
-- claimed_lines: include the concrete tactical line justifying the classification; empty [] for good/great with no tactical refutation
-- All moves in claimed_lines MUST appear in the engine best lines provided above — do not invent moves
+- NEVER name a move anywhere in your response (explanation, claimed_lines, or anywhere else) unless it appears verbatim in the engine alternatives or refutation lines provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
+- claimed_lines: use ONLY moves that appear verbatim in the engine alternatives or refutation lines above. Empty [] if none apply.
+- Do not make claims about tactical motifs (pins, forks, skewers, discovered attacks) unless the geometry is visible in the provided engine lines.
 - Output exactly the moveIdx values listed above, no more, no less
 - ${ANNOTATION_RULES}`;
-}
-
-function isLegalLine(movesSan, startFen) {
-  if (!movesSan || movesSan.length === 0 || !startFen) return false;
-  try {
-    const chess = new Chess(startFen);
-    for (const san of movesSan) {
-      if (!chess.move(san)) return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // Cost per million tokens (input/output)
@@ -136,9 +86,34 @@ export async function analyzeGameForBenchmark(pgn, {
 
     const game = reclassifyWithEvals(parsed, evals);
 
+    // Pre-compute before-move alternatives for each selected moment.
+    // This is the engine ground truth that v1.2 uses instead of LLM-invented moves.
+    const altDepth = Math.max(depth, 20);
+    const topMoments = selectMoments(game.moments, game.evals);
+    const momentEngineData = {};
+    for (const m of topMoments) {
+      const fenBefore = parsed.positions[m.moveIdx - 1]?.fen;
+      if (!fenBefore) continue;
+      // positions[m.moveIdx - 1].color is who just moved to reach fenBefore;
+      // if that was White, Black is to move → negate for White's perspective.
+      const needsFlip = parsed.positions[m.moveIdx - 1]?.color === 'w';
+      const sign = needsFlip ? -1 : 1;
+      const altLines = await engine.analyzePosition(fenBefore, altDepth, 3).catch(() => null);
+      const refEntry = perPly.find(p => p.ply === m.moveIdx);
+      momentEngineData[m.moveIdx] = {
+        top_alternatives: (altLines ?? []).map(l => ({
+          san: l.pv?.[0] ?? null,
+          eval_cp: l.mate != null ? null : Math.round((l.score ?? 0) * 100 * sign),
+          mate: l.mate != null ? (needsFlip ? -l.mate : l.mate) : null,
+          pv_san: l.pv?.slice(0, 5) ?? [],
+        })),
+        refutation_pv: refEntry?.best_lines?.[0]?.moves_san?.slice(0, 5) ?? [],
+      };
+    }
+
     const t1 = Date.now();
     const promptBuilder = (pgn, moments, summary, evals, tone) =>
-      buildBenchmarkPrompt(pgn, moments, summary, evals, tone, perPly, parsed.positions);
+      buildBenchmarkPrompt(pgn, moments, summary, evals, tone, perPly, parsed.positions, momentEngineData);
     const { result, usage } = await analyzeGameWithUsage(
       pgn, game.moments, game.summary, game.evals, key, tone, model, promptBuilder
     );
@@ -174,19 +149,36 @@ export async function analyzeGameForBenchmark(pgn, {
           const fenBefore = parsed.positions[m.moveIdx - 1]?.fen ?? null;
           const fenAfter  = parsed.positions[m.moveIdx]?.fen ?? null;
 
-          const rawClaimedLines = claudeMoment?.claimed_lines ?? [];
-          const validClaimedLines = rawClaimedLines.filter(line =>
-            isLegalLine(line.moves_san ?? [], fenAfter)
-          );
+          const engineData = momentEngineData[m.moveIdx];
 
-          const rawAlternatives = (m.betterMoves ?? []).map(bm => ({
-            move_san: bm.move,
-            eval_cp: null,
-            reason: bm.reason,
-          }));
-          const validAlternatives = rawAlternatives.filter(alt =>
-            isLegalLine([alt.move_san], fenBefore)
-          );
+          const rawClaimedLines = claudeMoment?.claimed_lines ?? [];
+          // Build set of engine-grounded moves from after-move position
+          const engineMovesAfter = new Set([
+            ...(engineData?.refutation_pv ?? []),
+            ...(perPly.find(p => p.ply === m.moveIdx)?.best_lines?.flatMap(l => l.moves_san?.slice(0, 5) ?? []) ?? []),
+          ]);
+          const validClaimedLines = rawClaimedLines.filter(line => {
+            const moves = line.moves_san ?? [];
+            if (!isLegalLine(moves, fenAfter)) return false;
+            // Every move must appear somewhere in the engine lines (any position across
+            // all PVs). This catches legal-but-invented moves deeper in the line.
+            if (moves.length > 0 && engineMovesAfter.size > 0 &&
+                moves.some(san => !engineMovesAfter.has(san))) return false;
+            return true;
+          });
+
+          // Build the set of engine-grounded SANs for this ply (played move +
+          // all moves appearing in top_alternatives PVs, refutation_pv, and
+          // perPly best_lines). Suffixes (+/#) stripped for comparison.
+          const strip = s => s?.replace(/[+#]$/, '');
+          const allowedSANs = new Set([
+            strip(m.notation),
+            ...(engineData?.top_alternatives?.flatMap(a => (a.pv_san ?? []).map(strip)) ?? []),
+            ...(engineData?.refutation_pv ?? []).map(strip),
+            ...(perPly.find(p => p.ply === m.moveIdx)?.best_lines?.flatMap(l => (l.moves_san ?? []).slice(0, 5).map(strip)) ?? []),
+          ].filter(Boolean));
+
+          const scrubbedExpl = scrubExplanation(m.explanation, allowedSANs);
 
           return {
             ply: m.moveIdx,
@@ -196,9 +188,10 @@ export async function analyzeGameForBenchmark(pgn, {
             classification: m.classification,
             eval_before_cp: Math.round(evalBefore * 100),
             eval_after_cp: Math.round(evalAfter * 100),
-            explanation: m.explanation,
+            explanation: scrubbedExpl,
             claimed_lines: validClaimedLines,
-            alternatives: validAlternatives,
+            top_alternatives: engineData?.top_alternatives ?? [],
+            refutation_pv: engineData?.refutation_pv ?? [],
           };
         }),
       stockfish_data: {

@@ -1790,7 +1790,7 @@ export default function App() {
     }
     setAnalysisStatus("loading");
     try {
-      const { result } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t });
+      const { result } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t, engine: browserEngine });
       localStorage.setItem(cacheKey, JSON.stringify({ data: result, ts: Date.now() }));
       setGameData((prev) => prev ? mergeAnalysis(prev, result) : prev);
       setAnalysisStatus("done");

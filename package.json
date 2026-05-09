@@ -11,7 +11,8 @@
     "analyze": "node benchmark/analyze.js",
     "benchmark": "node benchmark/runner.js",
     "judge": "node benchmark/judge.js",
-    "aggregate": "node benchmark/aggregate.js"
+    "aggregate": "node benchmark/aggregate.js",
+    "bench": "node benchmark/runner.js && node benchmark/aggregate.js --run $(ls -dt benchmark/results/*/ | head -1)"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

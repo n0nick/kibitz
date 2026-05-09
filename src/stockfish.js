@@ -115,7 +115,7 @@ export async function analyzeFullGame(positions, { onProgress, signal } = {}) {
   return signal?.aborted ? null : evals;
 }
 
-export const browserEngine = { analyzeFullGame };
+export const browserEngine = { analyzeFullGame, analyzePosition };
 
 export function engineLineText(lines) {
   if (!lines || lines.length === 0) return null;
