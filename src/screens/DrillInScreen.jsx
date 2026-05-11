@@ -1,16 +1,16 @@
 import { useState, useEffect, useRef, useContext } from "react";
-import { analyzeSinglePosition, chatAboutPosition, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
-import { computeSingleMoveEngineData } from "./pipeline";
-import { browserEngine } from "./stockfish";
-import { sanToSquares } from "./parseGame";
-import { FlagButton } from "./FlagButton";
-import { perMoveKey } from "./migrations";
-import { GameContext } from "./context";
-import { fmtSwing } from "./design";
+import { analyzeSinglePosition, chatAboutPosition, DEFAULT_MODEL, PROMPT_VERSION } from "../analyzeGame";
+import { computeSingleMoveEngineData } from "../pipeline";
+import { browserEngine } from "../stockfish";
+import { sanToSquares } from "../parseGame";
+import { FlagButton } from "../FlagButton";
+import { perMoveKey } from "../migrations";
+import { GameContext } from "../context";
+import { fmtSwing } from "../design";
 import {
   useKbz, Card, NavBar, Classification, ThemedBoard, EvalBar, HoverSparkline,
   Composer, ExtLinkIcon, CLASS_DEF, Annotated, stripAnnotations,
-} from "./ui";
+} from "../ui";
 
 // Thin shims around <Annotated> so we can keep the local call sites
 // readable. AnnotatedText is the inline form used on the drill-in card;
@@ -133,7 +133,7 @@ function BetterLine({ alt, alts, index, onCycle, moveNumber, fenBefore, fenAfter
 
 // ─── MoveAnalysisView ─────────────────────────────────────────────────────────
 
-export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective, onBack, analysisStatus, onPatchMoment, turningPoints = [] }) {
+export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, onBack, analysisStatus, onPatchMoment, turningPoints = [] }) {
   const { k } = useKbz();
   const game = useContext(GameContext);
   const { positions, evals, momentByMoveIdx, summary, pgn, promptSentToLlm, momentEngineData } = game;

@@ -85,7 +85,7 @@ function ThemePicker({ value, onChange }) {
   );
 }
 
-export function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, setApiKey, tone, setTone, lichessToken, lichessUser, setLichess }) {
+export function HomeScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, setApiKey, tone, setTone, lichessToken, lichessUser, setLichess }) {
   const { k, mode: themeMode, setTheme } = useKbz();
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);

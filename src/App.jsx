@@ -5,14 +5,14 @@ import ReportViewer from "./ReportViewer";
 import { browserEngine } from "./stockfish";
 import { mergeAnalysis, analyzePositions, analyzeWithClaude } from "./pipeline";
 import { runMigrations, evalsKey } from "./migrations";
-import { GameOverview } from "./GameOverview";
-import { MoveAnalysisView } from "./MoveAnalysisView";
 import { GameContext } from "./context";
 import { useApiKey, useTone, useLichess } from "./hooks/credentials";
 import { CACHE_TTL, gameSource, getCachedPgn, setCachedPgn, addToHistory, pgnGameId } from "./lib/games";
 import { DEMO_GAME } from "./demoGame";
-import { ImportScreen } from "./screens/ImportScreen";
+import { HomeScreen } from "./screens/HomeScreen";
 import { LoadingScreen } from "./screens/LoadingScreen";
+import { OverviewScreen } from "./screens/OverviewScreen";
+import { DrillInScreen } from "./screens/DrillInScreen";
 
 // ─── App router ───────────────────────────────────────────────────────────────
 //
@@ -330,7 +330,7 @@ export default function App() {
   if (screen === "overview" && gameData) {
     return (
       <GameContext.Provider value={gameData}>
-        <GameOverview
+        <OverviewScreen
           game={gameData}
           gameId={gameId}
           perspective={perspective}
@@ -353,7 +353,7 @@ export default function App() {
     const turningPoints = selectMoments(gameData.moments, gameData.evals, MAX_OVERVIEW_MOMENTS).map(m => m.moveIdx);
     return (
       <GameContext.Provider value={gameData}>
-        <MoveAnalysisView
+        <DrillInScreen
           initialPly={drillInPly}
           gameId={gameId}
           apiKey={apiKey}
@@ -369,7 +369,7 @@ export default function App() {
   }
 
   return (
-    <ImportScreen
+    <HomeScreen
       onImport={doImport}
       onImportPgn={doImportPgn}
       onDemo={() => {

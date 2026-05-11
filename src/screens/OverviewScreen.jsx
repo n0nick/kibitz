@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { chatAboutGame, selectMoments, MAX_OVERVIEW_MOMENTS, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
-import { FlagButton } from "./FlagButton";
+import { chatAboutGame, selectMoments, MAX_OVERVIEW_MOMENTS, DEFAULT_MODEL, PROMPT_VERSION } from "../analyzeGame";
+import { FlagButton } from "../FlagButton";
 import {
   useKbz, Card, Section, Editorial, NavBar, HoverSparkline, Classification, ThemedBoard,
   MoveTag, Composer, Annotated, stripAnnotations,
-} from "./ui";
-import { biggestSwingIdx, fmtEval } from "./design";
+} from "../ui";
+import { biggestSwingIdx, fmtEval } from "../design";
 
 // Editorial prose with the full marker set (bold, italic, ++pos++,
 // ~~cost~~, [[annotation]], muted parens). Thin alias over <Annotated>.
@@ -154,7 +154,7 @@ function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClic
 
 // ─── GameOverview ───────────────────────────────────────────────────────────
 
-export function GameOverview({
+export function OverviewScreen({
   game, gameId, perspective, onPerspectiveSet, onReset, onDrillIn, onStartReview,
   apiKey, tone, analysisStatus, localProgress, startLocalAnalysis,
 }) {

@@ -488,7 +488,7 @@ export function ExtLinkIcon({ size = 10, color = "currentColor", style }) {
 // ────────────────────────────────────────────────────────────────────────────
 // Themed chess board — uses board palette from design tokens (cream + sage by
 // default). Renders SVG pieces from /public/pieces, mirrors the existing
-// MoveAnalysisView Board API so it can be drop-in swapped.
+// DrillInScreen Board API so it can be drop-in swapped.
 
 const PIECE_NAMES = { K: "king", Q: "queen", R: "rook", B: "bishop", N: "knight", P: "pawn" };
 const pieceImg = (p) => `/pieces/${p === p.toUpperCase() ? "white" : "black"}-${PIECE_NAMES[p.toUpperCase()]}.svg`;
@@ -683,7 +683,7 @@ export function EvalBar({ before, after, perspective }) {
 // pointer to show a "move N · +1.4" readout, and optionally invokes
 // onClickIdx(ply) when the user taps a point on the line.
 //
-// Shared by GameOverview (whole-game eval) and MoveAnalysisView (drill-in
+// Shared by OverviewScreen (whole-game eval) and DrillInScreen (drill-in
 // swing visual). Both screens want the same affordances.
 // ────────────────────────────────────────────────────────────────────────────
 // Coach prose renderer — single component that handles every inline /
