@@ -739,19 +739,14 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
           </div>
         )}
 
-        {/* Sticky composer at bottom */}
-        <div style={{
-          position: "sticky", bottom: 0, marginTop: 16,
-          padding: "0 0 calc(env(safe-area-inset-bottom, 0) + 8px)",
-        }}>
-          <Composer
-            value={chatInput}
-            onChange={setChatInput}
-            onSend={sendChat}
-            placeholder={apiKey ? "Ask about this move…" : "Add API key from settings to chat"}
-            disabled={chatSending || !apiKey}
-          />
-        </div>
+        {/* Sticky composer at bottom — Composer already handles position:sticky + safe area */}
+        <Composer
+          value={chatInput}
+          onChange={setChatInput}
+          onSend={sendChat}
+          placeholder={apiKey ? "Ask about this move…" : "Add API key from settings to chat"}
+          disabled={chatSending || !apiKey}
+        />
       </div>
     </div>
   );

@@ -2,10 +2,11 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-// v1.7 — hardens the perspective instruction with explicit
-// substitutions, and adds a per-field reminder so narrative / card_teaser /
-// headline never slip into "White played… / Black missed…" commentator voice.
-export const PROMPT_VERSION = "v1.7";
+// v1.8 — perspective rule allows opponent color references again (user
+// stays strictly "you"), and reframes suggestedQuestion so it reads as
+// the user asking the coach in first person, never the coach quizzing
+// the user.
+export const PROMPT_VERSION = "v1.8";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -107,20 +108,16 @@ function perspectiveInstruction(perspective) {
   const opp = perspective === 'white' ? 'Black' : 'White';
   return `PERSPECTIVE — STRICT:
 
-The user plays the ${you} pieces. Every player reference in your output MUST use one of:
-  • "you" / "your" — for the user (${you})
-  • "your opponent" — for the opponent (${opp})
-
-Do NOT use the color name ("${you}", "${opp}") to refer to a player. The color is only allowed for geometric/piece references where it's actually needed (e.g. "the ${you.toLowerCase()}-squared bishop", "a ${opp.toLowerCase()} pawn on f5").
+The user plays the ${you} pieces. Reference the user as "you" / "your" — NEVER as "${you}". You may refer to the opponent as either "your opponent" or "${opp}" (the color is fine for the opponent; use whichever reads more naturally).
 
 Concrete substitutions:
   ✗ "${you} played Nf3"            ✓ "You played Nf3"
-  ✗ "${opp} missed mate"           ✓ "Your opponent missed mate"
   ✗ "${you} now has a forced…"     ✓ "You now have a forced…"
-  ✗ "${opp} blunders the queen"    ✓ "Your opponent blunders the queen"
   ✗ "${you} ground out the endgame"   ✓ "You ground out the endgame"
+  ✓ "Your opponent missed mate" — fine
+  ✓ "${opp} missed mate" — also fine
 
-Frame eval swings from your perspective: when the eval moves in your favour, call it relief / opportunity; when against, frame it as a problem you face. Never narrate in neutral commentator voice.`;
+Frame eval swings from your perspective: when the eval moves in your favour, call it relief / opportunity; when against, frame it as a problem you face. Never narrate the user's own moves in third person.`;
 }
 
 // Formats one moment entry for the prompt, including engine alternatives and
@@ -238,7 +235,7 @@ Return ONLY valid JSON, no markdown:
       "card_teaser": "ONE plain-language sentence summarising what happened. No annotations. Used on list cards alongside the headline.",
       "explanation": "2-3 short sentences explaining the MECHANISM on the board (what tactical/positional geometry was at play). Annotation-heavy: use [[square]], [[piece|square]], [[move|from-to]] to anchor every key square. MUST start as a self-contained sentence — never with a conjunction ('But', 'And', 'So', 'Yet', 'However') that depends on the headline above. Do NOT restate the swing, the classification, or the better-line move; the UI already shows those.",
       "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
-      "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up question>"
+      "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up. Phrase it as the USER asking the coach in first person — eg. 'Why was h5 worse than developing the knight?' or 'How should I have defended the king instead?' — NEVER as the coach quizzing the user (eg. don't say 'Why didn't you defend your king?')>"
     }
   ]
 }
@@ -247,7 +244,7 @@ Rules:
 - ${betterMovesRule}${extraRules}
 - Output exactly the moveIdx values listed above, no more, no less
 - headline must NEVER contain [[annotations]], SAN move names, or eval numbers — it's a pull-quote${perspective ? `
-- PERSPECTIVE applies to every text field — narrative, pattern, headline, card_teaser, explanation, betterMoves[].reason. Use "you" / "your opponent" exclusively. Do NOT write "${perspective === 'white' ? 'White' : 'Black'} played…" or "${perspective === 'white' ? 'Black' : 'White'} now has…" anywhere.` : ''}
+- PERSPECTIVE applies to every text field — narrative, pattern, headline, card_teaser, explanation, betterMoves[].reason. The user must always be "you" — never written as "${perspective === 'white' ? 'White' : 'Black'}". The opponent can be "your opponent" or "${perspective === 'white' ? 'Black' : 'White'}" (color is fine for the opponent only).` : ''}
 - card_teaser must be ONE sentence only, no [[annotation]] syntax, plain language a non-expert can read
 - ${ANNOTATION_RULES}`;
 }

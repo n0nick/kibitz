@@ -317,6 +317,8 @@ export function NavBar({ title, subtitle, left, right }) {
 
 // ────────────────────────────────────────────────────────────────────────────
 // Composer — bottom-of-screen sticky text input used by both coach chats.
+// When `sticky` is true the composer floats above page content with a soft
+// gradient mask and an iOS-friendly safe-area inset.
 export function Composer({ value, onChange, onSend, placeholder, disabled, sticky = true }) {
   const k = tokens;
   return (
@@ -325,7 +327,9 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, stick
         position: sticky ? "sticky" : "static",
         bottom: 0,
         padding: "10px 14px",
-        background: `linear-gradient(to top, ${k.bg} 70%, transparent)`,
+        paddingBottom: sticky ? "calc(10px + env(safe-area-inset-bottom, 0px))" : 10,
+        background: sticky ? `linear-gradient(to top, ${k.bg} 65%, ${k.bg}00)` : "transparent",
+        zIndex: 5,
       }}
     >
       <div
@@ -337,6 +341,9 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, stick
           borderRadius: 22,
           background: k.surface,
           border: `1px solid ${k.hairline}`,
+          boxShadow: k.isDark
+            ? "0 4px 14px rgba(0,0,0,0.35)"
+            : "0 4px 14px rgba(60,40,20,0.06)",
         }}
       >
         <input
