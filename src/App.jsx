@@ -733,8 +733,29 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
       </div>
 
       {/* ─── Settings drawer ────────────────────────────────────────────── */}
-      {drawer === "settings" && (
-        <Drawer onClose={() => setDrawer(null)} title="Settings" subtitle={lichessUser ? `Connected as ${lichessUser}` : "Not connected"}>
+      {drawer === "settings" && (() => {
+        const firstRun = !apiKey && !lichessUser;
+        return (
+        <Drawer
+          onClose={() => setDrawer(null)}
+          title={firstRun ? "Welcome to Kibitz" : "Settings"}
+          subtitle={
+            firstRun
+              ? "Add an Anthropic key for coaching, and connect Lichess to pull your games."
+              : lichessUser
+              ? `Connected as ${lichessUser}`
+              : "Not connected"
+          }
+        >
+          {firstRun && (
+            <div style={{ marginBottom: 18 }}>
+              <Editorial size={20} style={{ lineHeight: 1.3 }}>
+                Every game has a moment.<br />
+                <span style={{ color: k.accent }}>Let's find yours.</span>
+              </Editorial>
+            </div>
+          )}
+
           <DrawerField label="Anthropic API key" hint={apiKey ? "saved" : undefined}>
             <DrawerInputRow
               type={keyVisible ? "text" : "password"}
@@ -777,7 +798,8 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
             </a>
           </div>
         </Drawer>
-      )}
+        );
+      })()}
 
       {/* ─── Add-game full-screen page (screen 02) ──────────────────────── */}
       {drawer === "add" && (
