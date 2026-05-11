@@ -222,6 +222,7 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
   const [chatSending, setChatSending] = useState(false);
   const chatEndRef = useRef(null);
   const rightPanelRef = useRef(null);
+  const engineTimerRef = useRef(null);
 
   const flip = perspective === 'black';
   const fenBefore = positions[plyIdx - 1]?.fen;
@@ -260,13 +261,18 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
       } catch {}
     }
 
+    // Debounce engine preload — cancel on rapid navigation to avoid concurrent WASM workers
+    clearTimeout(engineTimerRef.current);
     if (positions[plyIdx - 1]?.fen) {
-      computeSingleMoveEngineData(positions, plyIdx, browserEngine, {
-        depth: 14,
-        lichessGameId: gameSource(gameId) === 'lichess' ? gameId : null,
-        numPv: 10,
-      }).then(setRichEngData).catch(() => {});
+      engineTimerRef.current = setTimeout(() => {
+        computeSingleMoveEngineData(positions, plyIdx, browserEngine, {
+          depth: 14,
+          lichessGameId: gameSource(gameId) === 'lichess' ? gameId : null,
+          numPv: 10,
+        }).then(setRichEngData).catch(() => {});
+      }, 600);
     }
+    return () => clearTimeout(engineTimerRef.current);
   }, [plyIdx, gameId, tone]);
 
   // Keyboard navigation

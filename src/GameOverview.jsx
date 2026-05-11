@@ -302,11 +302,16 @@ export function GameOverview({
               )}
             </div>
           </div>
-          {/* Mobile progress dots */}
-          <div className="md:hidden flex items-center gap-1 pt-1.5 shrink-0">
-            {Array.from({ length: totalCards }, (_, i) => (
-              <div key={i} className={`rounded-full transition-all ${i === activeCard ? 'w-4 h-1.5 bg-zinc-300' : 'w-1.5 h-1.5 bg-zinc-700'}`} />
-            ))}
+          {/* Mobile progress dots + swipe hint */}
+          <div className="md:hidden flex items-center gap-2 pt-1.5 shrink-0">
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalCards }, (_, i) => (
+                <div key={i} className={`rounded-full transition-all ${i === activeCard ? 'w-4 h-1.5 bg-zinc-300' : 'w-1.5 h-1.5 bg-zinc-700'}`} />
+              ))}
+            </div>
+            {activeCard === 0 && (
+              <span className="text-[9px] text-zinc-600 tracking-wide">swipe to explore →</span>
+            )}
           </div>
         </div>
 
