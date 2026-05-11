@@ -2,7 +2,10 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-export const PROMPT_VERSION = "v1.2";
+// v1.3 — adds an editorial `headline` field per moment for the new design's
+// pull-quote treatment, and asks for markdown structure (bold action verbs,
+// bulleted reasons, "what you should have done") from the chat coach.
+export const PROMPT_VERSION = "v1.3";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -211,13 +214,14 @@ ${momentsList}
 
 Return ONLY valid JSON, no markdown:
 {
-  "narrative": "2-3 sentences: how the game unfolded and what decided it",
-  "pattern": "1-2 sentences: a recurring theme or lesson",
+  "narrative": "2-3 sentences: how the game unfolded and what decided it. Write it as editorial prose — calm, present-tense, no list of moves. May include [[piece|square]] or [[move|from-to]] annotations to anchor key squares; keep it readable when annotations are stripped.",
+  "pattern": "1-2 sentences: a recurring theme or lesson. Frame as a principle (eg. 'keep tension when ahead'), not as data the user can't verify (avoid stats like '73% accuracy' unless they're in the eval list).",
   "moments": [
     {
       "moveIdx": <number>,
-      "card_teaser": "ONE sentence, no annotations, plain everyday language: what happened at this moment and why it mattered",
-      "explanation": "1-2 sentences with [[square/piece/move]] annotations: what happened and why it matters",
+      "headline": "ONE editorial-style sentence, plain prose, no annotations, no SAN move names. Pull-quote voice — eg. 'You gave away the bishop pair — and a winning position — for one pawn and a check.' The reader has the board, the move, and the eval swing; the headline names the *stakes*.",
+      "card_teaser": "ONE plain-language sentence summarising what happened. No annotations. Used on list cards alongside the headline.",
+      "explanation": "2-3 short sentences with [[square/piece/move]] annotations: what happened and why it matters. Bold the action verb (**trade**, **sacrifice**, **defend**) when natural.",
       "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
       "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up question>"
     }
@@ -227,6 +231,7 @@ Return ONLY valid JSON, no markdown:
 Rules:
 - ${betterMovesRule}${extraRules}
 - Output exactly the moveIdx values listed above, no more, no less
+- headline must NEVER contain [[annotations]], SAN move names, or eval numbers — it's a pull-quote
 - card_teaser must be ONE sentence only, no [[annotation]] syntax, plain language a non-expert can read
 - ${ANNOTATION_RULES}`;
 }
@@ -338,7 +343,12 @@ ${tpSummary}
 ${evalSample}
 ${pgn ? `PGN:\n${pgn}` : ''}
 Tone: ${toneDesc(tone)}
-Be concise. Use markdown: **bold** for key points, *italic* for concepts.
+Reply in calm, editorial prose. Be concise. Use markdown structure where it helps:
+- **bold** for action verbs and key takeaways
+- *italics* for chess concepts
+- "### What you could have done" as a small section header when prescribing an alternative
+- bullet lists (\`- \`) for parallel reasons
+Keep the answer short — two short paragraphs at most.
 IMPORTANT: You have game-level context but not position-specific engine analysis for arbitrary positions. For strategic/narrative questions, answer from the context above. For specific tactical sequences not shown in the turning points, describe ideas in words rather than naming specific moves you cannot verify.`;
 
   const apiMessages = [
@@ -355,7 +365,12 @@ export async function chatAboutPosition({ summary, moment, messages, question, t
   const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown"}, ${summary.result}).${perspLine ? `\n${perspLine}` : ''}
 Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification})${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fen ? `\nPosition (FEN): ${fen}` : ""}${engineLine ? `\n${engineLine}` : ""}
 Tone: ${toneDesc(tone)}
-Be concise. Use markdown: **bold** for key points, *italic* for concepts. ${ANNOTATION_RULES}
+Reply in calm, editorial coach prose. Be concise — two short paragraphs at most. Use markdown to structure the answer:
+- **bold** for action verbs (**trade**, **defend**, **push**) and the key takeaway
+- *italics* for chess concepts (*initiative*, *bishop pair*)
+- "### What you should have done" as a small section header when prescribing an alternative
+- bullet lists (\`- \`) when listing parallel reasons
+Annotate squares and moves with the standard markup so they highlight on the board: ${ANNOTATION_RULES}
 IMPORTANT: Only claim a move gives check or captures a piece if it genuinely does so in the given FEN. When an engine line is provided, use it as ground truth for tactical calculation.`;
 
   const apiMessages = [

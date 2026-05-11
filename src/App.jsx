@@ -1,7 +1,6 @@
-import { useState, useRef, useEffect, useContext } from "react";
+import { useState, useRef, useEffect } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame, reclassifyWithEvals } from "./parseGame";
 import { TONES, DEFAULT_MODEL, PROMPT_VERSION, selectMoments, MAX_OVERVIEW_MOMENTS } from "./analyzeGame";
-import { FlagButton } from "./FlagButton";
 import ReportViewer from "./ReportViewer";
 import { fetchLichessAccount, fetchLichessRecentGames } from "./lichess";
 import { browserEngine } from "./stockfish";
@@ -10,6 +9,7 @@ import { runMigrations, evalsKey } from "./migrations";
 import { GameOverview } from "./GameOverview";
 import { MoveAnalysisView } from "./MoveAnalysisView";
 import { GameContext } from "./context";
+import { k, Card, Section, Editorial, NavBar, OpponentDot, Stat, ExtLinkIcon } from "./ui";
 
 // ─── Demo game (Opera Game, 1858) ─────────────────────────────────────────────
 
@@ -302,23 +302,85 @@ function useLichess() {
   return [token, username, setLichess];
 }
 
-// ─── Import screen ────────────────────────────────────────────────────────────
+// ─── Import / Home screen ─────────────────────────────────────────────────────
+
+const timeAgo = (ms) => {
+  if (!ms) return "";
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 86400 * 7) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(ms).toLocaleDateString();
+};
+
+// Tiny inline sparkline used inside game cards on the home screen.
+function MiniSpark({ evals, markIdx }) {
+  const w = 64, h = 22, max = 3;
+  if (!evals || evals.length < 2) {
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+        <line x1="0" y1={h / 2} x2={w} y2={h / 2} stroke={k.hairline} strokeDasharray="2 3" />
+      </svg>
+    );
+  }
+  const x = (i) => (i / (evals.length - 1)) * (w - 2) + 1;
+  const y = (v) => h / 2 - Math.max(-max, Math.min(max, v)) / max * (h / 2 - 3);
+  const d = evals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <line x1="0" y1={h / 2} x2={w} y2={h / 2} stroke={k.hairline} strokeDasharray="2 3" />
+      <path d={d} fill="none" stroke={k.accent} strokeWidth="1.4" strokeLinecap="round" />
+      {markIdx !== undefined && markIdx > 0 && (
+        <circle
+          cx={x(markIdx)}
+          cy={y(evals[markIdx])}
+          r="2.5"
+          fill={k.warn}
+          stroke={k.bg}
+          strokeWidth="1"
+        />
+      )}
+    </svg>
+  );
+}
+
+// Result -> W/L/D from the user's perspective.
+function resultForUser(game, lichessUser) {
+  if (!lichessUser) return null;
+  const u = lichessUser.toLowerCase();
+  const userIsWhite = game.white?.toLowerCase() === u;
+  const userIsBlack = game.black?.toLowerCase() === u;
+  if (!userIsWhite && !userIsBlack) return null;
+  if (!game.winner) return "D";
+  if (game.winner === "white" && userIsWhite) return "W";
+  if (game.winner === "black" && userIsBlack) return "W";
+  return "L";
+}
 
 function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, setApiKey, tone, setTone, lichessToken, lichessUser, setLichess }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState(null);
   const [forceReanalyze, setForceReanalyze] = useState(false);
+  const [drawer, setDrawer] = useState(null); // null | "settings" | "add"
   const [keyDraft, setKeyDraft] = useState(apiKey);
   const [keyVisible, setKeyVisible] = useState(false);
   const [lichessDraft, setLichessDraft] = useState(lichessToken);
   const [lichessVisible, setLichessVisible] = useState(false);
   const [lichessError, setLichessError] = useState(null);
-  const [settingsOpen, setSettingsOpen] = useState(!(apiKey && lichessUser));
   const [games, setGames] = useState(null);
   const [gamesStale, setGamesStale] = useState(false);
   const [gamesError, setGamesError] = useState(null);
   const [history] = useState(() => getHistory());
+
+  // Auto-open the Settings drawer the first time, when no credentials are set.
+  useEffect(() => {
+    if (!apiKey && !lichessUser) setDrawer("settings");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { setKeyDraft(apiKey); }, [apiKey]);
+  useEffect(() => { setLichessDraft(lichessToken); }, [lichessToken]);
 
   useEffect(() => {
     if (!lichessUser) { setGames(null); setGamesStale(false); return; }
@@ -341,7 +403,7 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
         if (!cached) { setGamesError(e.message); setGames(null); }
         setGamesStale(false);
       });
-  }, [lichessUser]);
+  }, [lichessUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveApiKey = () => setApiKey(keyDraft);
   const saveLichessToken = async () => {
@@ -373,6 +435,7 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
   const handleUrlLoad = async () => {
     if (!canLoad) return;
     setLoading(true);
+    setDrawer(null);
     if (isPgn) {
       setLoadingId("pgn");
       await onImportPgn(url, forceReanalyze);
@@ -385,261 +448,515 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
     setForceReanalyze(false);
   };
 
-  const timeAgo = (ms) => {
-    const s = Math.floor((Date.now() - ms) / 1000);
-    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-    return `${Math.floor(s / 86400)}d ago`;
+  // Aggregate top-of-page stats from the games list.
+  const gamesArr = Array.isArray(games) ? games : [];
+  const accGames = gamesArr.filter((g) => g.stats?.accuracy != null);
+  const youAvgAcc = (() => {
+    if (!lichessUser || accGames.length === 0) return null;
+    const accs = accGames.map((g) => {
+      const u = lichessUser.toLowerCase();
+      if (g.white?.toLowerCase() === u) return g.stats.whiteAccuracy;
+      if (g.black?.toLowerCase() === u) return g.stats.blackAccuracy;
+      return null;
+    }).filter((v) => v != null);
+    if (!accs.length) return null;
+    return accs.reduce((s, v) => s + v, 0) / accs.length;
+  })();
+  const sessions = gamesArr.length;
+  const streak = (() => {
+    if (!gamesArr.length) return 0;
+    const days = new Set(gamesArr.map((g) => new Date(g.playedAt).toDateString()));
+    let s = 0;
+    for (let i = 0; i < 365; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      if (days.has(d.toDateString())) s++;
+      else if (i > 0) break;
+    }
+    return s;
+  })();
+
+  const refreshGames = () => {
+    if (!lichessUser) return;
+    const cacheKey = `kibitz-games-${lichessUser}`;
+    setGamesStale(true);
+    fetchLichessRecentGames(lichessUser, lichessToken)
+      .then((fresh) => { setGames(fresh); setGamesStale(false); try { localStorage.setItem(cacheKey, JSON.stringify(fresh)); } catch {} })
+      .catch((e) => { setGamesError(e.message); setGamesStale(false); });
   };
 
+  const lichessIds = new Set(Array.isArray(games) ? games.map((g) => g.id) : []);
+  const historyFiltered = history.filter((h) => !lichessIds.has(h.id));
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center pt-16 p-6">
-      <div className="w-full max-w-md space-y-5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Kibitz</h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            {lichessUser ? `Connected as ${lichessUser}` : "Analyze your chess games with AI"}
-          </p>
+    <div style={{ minHeight: "100vh", background: k.bg, color: k.text, fontFamily: k.font.sans, paddingBottom: 64 }}>
+      <NavBar
+        left={
+          <button
+            onClick={() => setDrawer(drawer === "settings" ? null : "settings")}
+            aria-label="Settings"
+            style={{ background: "transparent", border: "none", color: k.textMute, fontSize: 22, lineHeight: 1, cursor: "pointer", padding: 4 }}
+          >
+            ☰
+          </button>
+        }
+        title="Kibitz"
+        right={
+          <button
+            onClick={() => setDrawer(drawer === "add" ? null : "add")}
+            aria-label="Add a game"
+            style={{ background: "transparent", border: "none", color: k.accent, fontSize: 26, lineHeight: 1, cursor: "pointer", padding: 4, fontWeight: 300 }}
+          >
+            +
+          </button>
+        }
+      />
+
+      <div style={{ maxWidth: 540, margin: "0 auto" }}>
+        {/* Editorial hero */}
+        <div style={{ padding: "4px 22px 22px" }}>
+          <Editorial size={32} style={{ lineHeight: 1.1 }}>
+            Every game has a moment.<br />
+            <span style={{ color: k.accent }}>Let's find yours.</span>
+          </Editorial>
+
+          {(lichessUser && (youAvgAcc != null || sessions > 0)) && (
+            <div style={{ marginTop: 18, display: "flex", gap: 22, flexWrap: "wrap" }}>
+              {youAvgAcc != null && (
+                <Stat label="Avg accuracy" value={youAvgAcc.toFixed(1)} />
+              )}
+              {sessions > 0 && <Stat label="Sessions" value={String(sessions)} sub="loaded" />}
+              {streak > 0 && <Stat label="Streak" value={String(streak)} sub={streak === 1 ? "day" : "days"} accent={k.accent} />}
+            </div>
+          )}
+
+          {!lichessUser && !apiKey && (
+            <div style={{ marginTop: 16, fontSize: 13, color: k.textMute, lineHeight: 1.5 }}>
+              Add an Anthropic API key and connect your Lichess account from{" "}
+              <button
+                onClick={() => setDrawer("settings")}
+                style={{ background: "transparent", border: "none", color: k.accent, cursor: "pointer", padding: 0, fontSize: 13, fontWeight: 500 }}
+              >
+                settings ☰
+              </button>{" "}
+              — or tap the <span style={{ color: k.accent }}>+</span> to paste a game.
+            </div>
+          )}
         </div>
 
-        {/* Tone */}
-        <div className="space-y-2">
-          <label className="text-xs text-zinc-500 uppercase tracking-widest">Analysis level</label>
-          <div className="flex gap-2">
-            {TONES.map((t) => (
-              <button
-                key={t.value}
-                onClick={() => setTone(t.value)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-                  tone === t.value ? "bg-zinc-700 border-zinc-500 text-zinc-100" : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+        {/* Tone selector — small inline strip, not a full section */}
+        <div style={{ padding: "0 22px 16px" }}>
+          <div className="kbz-caps" style={{ marginBottom: 8 }}>Analysis tone</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {TONES.map((t) => {
+              const on = tone === t.value;
+              return (
+                <button
+                  key={t.value}
+                  onClick={() => setTone(t.value)}
+                  style={{
+                    flex: 1,
+                    padding: "8px 0",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: on ? k.text : k.textMute,
+                    background: on ? k.surface2 : "transparent",
+                    border: `1px solid ${on ? k.hairline : "transparent"}`,
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    fontFamily: k.font.sans,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* My games — click to load */}
-        {lichessUser && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
-                My recent games
-                {gamesStale && <span className="text-zinc-600 animate-pulse">↻</span>}
-              </label>
-              <button
-                onClick={() => {
-                  const cacheKey = `kibitz-games-${lichessUser}`;
-                  setGamesStale(true);
-                  fetchLichessRecentGames(lichessUser, lichessToken)
-                    .then((fresh) => { setGames(fresh); setGamesStale(false); try { localStorage.setItem(cacheKey, JSON.stringify(fresh)); } catch {} })
-                    .catch((e) => { setGamesError(e.message); setGamesStale(false); });
-                }}
-                className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
-              >
-                refresh
-              </button>
-            </div>
-            {games === "loading" ? (
-              <p className="text-xs text-zinc-600 animate-pulse py-2">Loading games…</p>
-            ) : gamesError ? (
-              <p className="text-xs text-red-500/70">{gamesError}</p>
-            ) : Array.isArray(games) && games.length > 0 ? (
-              <div className="rounded-xl border border-zinc-800 overflow-hidden divide-y divide-zinc-800/60 max-h-56 overflow-y-auto">
-                {games.map((g) => {
-                  const opp = g.white.toLowerCase() === lichessUser.toLowerCase() ? g.black : g.white;
-                  const isLoading = loadingId === g.id;
-                  return (
-                    <a
-                      key={g.id}
-                      href={`?game=${g.id}`}
-                      onClick={loading ? undefined : spaClick(() => { setError(null); handleListLoad(g.id); })}
-                      className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors ${
-                        isLoading ? "bg-indigo-600/10" : "hover:bg-zinc-800/60"
-                      } ${loading ? "opacity-60 pointer-events-none" : ""}`}
-                    >
-                      <span className={`shrink-0 text-[8px] ${g.hasEvals ? "text-emerald-400" : "text-amber-400"}`}>●</span>
-                      <span className="flex-1 min-w-0 truncate">
-                        <span className="text-zinc-200 font-medium">vs {opp}</span>
-                        {g.opening && <span className="text-zinc-500 text-xs ml-2">{g.opening.split(":")[0]}</span>}
-                      </span>
-                      <span className="text-zinc-500 text-xs shrink-0">{g.result}</span>
-                      {isLoading
-                        ? <span className="text-zinc-500 text-[10px] shrink-0 animate-pulse">loading…</span>
-                        : <span className="text-zinc-700 text-[10px] shrink-0">{timeAgo(g.playedAt)}</span>
-                      }
-                    </a>
-                  );
-                })}
-              </div>
-            ) : Array.isArray(games) ? (
-              <p className="text-xs text-zinc-600 py-2">No recent games found.</p>
-            ) : null}
+        {/* Error banner */}
+        {error && (
+          <div style={{ margin: "0 16px 12px", padding: 12, borderRadius: 12, background: `${k.bad}22`, color: k.bad, fontSize: 13 }}>
+            {error.message ?? String(error)}
+            {error.gameUrl && (
+              <> — <a href={error.gameUrl} target="_blank" rel="noreferrer" style={{ color: k.bad, textDecoration: "underline" }}>open on Lichess</a></>
+            )}
           </div>
         )}
 
-        {/* Previously reviewed */}
-        {(() => {
-          const lichessIds = new Set(Array.isArray(games) ? games.map((g) => g.id) : []);
-          const filtered = history.filter((h) => !lichessIds.has(h.id));
-          if (!filtered.length) return null;
-          return (
-            <div className="space-y-2">
-              <label className="text-xs text-zinc-500 uppercase tracking-widest">Previously reviewed</label>
-              <div className="rounded-xl border border-zinc-800 overflow-hidden divide-y divide-zinc-800/60 max-h-56 overflow-y-auto">
-                {filtered.map((h) => {
-                  const isLoading = loadingId === h.id;
-                  return (
-                    <a
-                      key={h.id}
-                      href={`?game=${h.id}`}
-                      onClick={loading ? undefined : spaClick(() => {
-                        setError(null);
-                        if (gameSource(h.id) === "pgn") {
-                          const pgn = getCachedPgn(h.id);
-                          if (pgn) { setLoading(true); setLoadingId(h.id); onImportPgn(pgn).finally(() => { setLoading(false); setLoadingId(null); }); }
-                        } else {
-                          handleListLoad(h.id);
-                        }
-                      })}
-                      className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors ${isLoading ? "bg-indigo-600/10" : "hover:bg-zinc-800/60"} ${loading ? "opacity-60 pointer-events-none" : ""}`}
-                    >
-                      <span className={`shrink-0 text-[8px] ${h.source === "lichess" ? "text-emerald-400" : "text-indigo-400"}`}>●</span>
-                      <span className="flex-1 min-w-0 truncate text-zinc-200 font-medium">
-                        {h.white} vs {h.black}
-                      </span>
-                      <span className="text-zinc-500 text-xs shrink-0">{h.result}</span>
-                      <span className="text-zinc-700 text-[10px] shrink-0">{timeAgo(h.reviewedAt)}</span>
-                    </a>
-                  );
-                })}
+        {/* Recent games */}
+        <Section
+          label={lichessUser ? "Recent" : "Try a sample"}
+          action={lichessUser ? (gamesStale ? "↻ refreshing…" : "Refresh") : undefined}
+          onAction={lichessUser ? refreshGames : undefined}
+          style={{ padding: "0 16px" }}
+        >
+          {!lichessUser ? (
+            <Card onClick={onDemo} pad={14}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: k.accentDim, color: k.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+                  ♞
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>Opera Game (1858)</div>
+                  <div style={{ fontSize: 12, color: k.textMute, marginTop: 2 }}>Morphy vs Duke Karl — pre-analysed, no signup</div>
+                </div>
+                <div style={{ color: k.textDim, fontSize: 20 }}>›</div>
               </div>
+            </Card>
+          ) : games === "loading" ? (
+            <div style={{ color: k.textDim, fontSize: 13, padding: "12px 4px", animation: "kbz-pulse 1.2s ease-in-out infinite" }}>
+              Loading games…
             </div>
-          );
-        })()}
-
-        {/* URL / PGN input */}
-        <div className="space-y-2">
-          {lichessUser && <p className="text-xs text-zinc-600 text-center">— or paste a URL or PGN —</p>}
-          <div className="flex gap-2">
-            <div className="relative flex-1 min-w-0">
-              <input
-                type="text"
-                value={url}
-                onChange={(e) => { setUrl(e.target.value); setError(null); }}
-                onKeyDown={(e) => e.key === "Enter" && handleUrlLoad()}
-                placeholder="https://lichess.org/… or paste a PGN"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
-                autoFocus={!lichessUser}
-              />
-              {isPgn && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-indigo-400 bg-indigo-950/60 px-1.5 py-0.5 rounded pointer-events-none">
-                  PGN
-                </span>
-              )}
+          ) : gamesError ? (
+            <div style={{ color: k.bad, fontSize: 13, padding: "12px 4px" }}>{gamesError}</div>
+          ) : Array.isArray(games) && games.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {games.map((g) => {
+                const opp = g.white?.toLowerCase() === lichessUser.toLowerCase() ? g.black : g.white;
+                const userResult = resultForUser(g, lichessUser);
+                const userElo = g.white?.toLowerCase() === lichessUser.toLowerCase() ? g.whiteRating : g.blackRating;
+                const oppElo = g.white?.toLowerCase() === lichessUser.toLowerCase() ? g.blackRating : g.whiteRating;
+                const time = g.clockInitial != null
+                  ? `${Math.floor((g.clockInitial ?? 0) / 60)}+${g.clockIncrement ?? 0}`
+                  : g.speed;
+                const isLoading = loadingId === g.id;
+                return (
+                  <a
+                    key={g.id}
+                    href={`?game=${g.id}`}
+                    onClick={loading ? undefined : spaClick(() => { setError(null); handleListLoad(g.id); })}
+                    style={{ textDecoration: "none", color: "inherit", display: "block", opacity: loading && !isLoading ? 0.5 : 1, pointerEvents: loading ? "none" : "auto" }}
+                  >
+                    <Card pad={14} lift={isLoading} style={{ position: "relative" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                        <OpponentDot result={userResult ?? "D"} />
+                        <span style={{ fontWeight: 600, fontSize: 15 }}>vs {opp ?? "Unknown"}</span>
+                        {oppElo && (
+                          <span style={{ fontFamily: k.font.mono, fontSize: 11, color: k.textDim }}>{oppElo}</span>
+                        )}
+                        <span style={{ flex: 1 }} />
+                        <span style={{ fontFamily: k.font.mono, fontSize: 13, color: k.textMute }}>
+                          {g.result === "½-½" ? "½–½" : g.result}
+                        </span>
+                      </div>
+                      <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        fontSize: 12, color: k.textMute, marginBottom: 10,
+                      }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>
+                          {g.opening ? g.opening.split(":")[0] : "Unknown opening"}{time ? ` · ${time}` : ""}
+                        </span>
+                        <span>{timeAgo(g.playedAt)}</span>
+                      </div>
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        paddingTop: 10, borderTop: `1px solid ${k.hairline}`,
+                      }}>
+                        <MiniSpark evals={g.evals} markIdx={g.stats?.biggestSwingIdx} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {g.hasEvals ? (
+                            <>
+                              <div style={{ fontSize: 12, color: k.text, fontWeight: 500, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {g.stats?.insight ?? "Computer-analysed"}
+                              </div>
+                              <div style={{ fontSize: 11, color: k.textDim, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                {g.stats?.accuracy != null && <span>{g.stats.accuracy.toFixed(1)}% acc</span>}
+                                {g.stats?.turningPoints > 0 && (
+                                  <span>· {g.stats.turningPoints} turning point{g.stats.turningPoints !== 1 ? "s" : ""}</span>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ fontSize: 12, color: k.textDim, fontStyle: "italic" }}>
+                              No computer analysis yet
+                            </div>
+                          )}
+                        </div>
+                        {isLoading ? (
+                          <span style={{ color: k.accent, fontSize: 11, fontWeight: 600, animation: "kbz-pulse 1.2s ease-in-out infinite" }}>loading…</span>
+                        ) : (
+                          <span style={{ color: k.textDim, fontSize: 18 }}>›</span>
+                        )}
+                      </div>
+                    </Card>
+                  </a>
+                );
+              })}
             </div>
-            <button
-              onClick={handleUrlLoad}
-              disabled={loading || !canLoad}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-30 rounded-xl text-sm font-semibold transition-colors shrink-0"
-            >
-              {loadingId && loading ? "…" : "Load →"}
-            </button>
-          </div>
-          {error && (
-            <p className="text-sm text-red-400">
-              {error.message ?? error}
-              {error.gameUrl && (
-                <> — <a href={error.gameUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-red-300">open on Lichess</a></>
-              )}
-            </p>
-          )}
-        </div>
+          ) : Array.isArray(games) ? (
+            <div style={{ color: k.textDim, fontSize: 13, padding: "12px 4px" }}>No recent games found.</div>
+          ) : null}
+        </Section>
 
-        {/* Re-analyze + Opera Game */}
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={forceReanalyze} onChange={(e) => setForceReanalyze(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-500" />
-            <span className="text-xs text-zinc-500">Re-analyze (overwrite saved)</span>
-          </label>
-          <div className="flex items-center gap-3">
-            <button onClick={onDemo} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline underline-offset-2">
-              try the Opera Game
-            </button>
-            <a href="https://github.com/n0nick/kibitz" target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-700 hover:text-zinc-500 transition-colors">
-              GitHub
+        {/* Previously reviewed (non-lichess history only) */}
+        {historyFiltered.length > 0 && (
+          <Section label="Previously reviewed" style={{ padding: "20px 16px 0" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {historyFiltered.map((h) => {
+                const isLoading = loadingId === h.id;
+                return (
+                  <a
+                    key={h.id}
+                    href={`?game=${h.id}`}
+                    onClick={loading ? undefined : spaClick(() => {
+                      setError(null);
+                      if (gameSource(h.id) === "pgn") {
+                        const pgn = getCachedPgn(h.id);
+                        if (pgn) { setLoading(true); setLoadingId(h.id); onImportPgn(pgn).finally(() => { setLoading(false); setLoadingId(null); }); }
+                      } else {
+                        handleListLoad(h.id);
+                      }
+                    })}
+                    style={{ textDecoration: "none", color: "inherit", display: "block", opacity: loading && !isLoading ? 0.5 : 1, pointerEvents: loading ? "none" : "auto" }}
+                  >
+                    <Card pad={12}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 3, background: h.source === "lichess" ? k.accent : k.warn }} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14, fontWeight: 500 }}>
+                          {h.white} vs {h.black}
+                        </span>
+                        <span style={{ color: k.textMute, fontSize: 12, fontFamily: k.font.mono }}>{h.result}</span>
+                        <span style={{ color: k.textDim, fontSize: 11 }}>{timeAgo(h.reviewedAt)}</span>
+                      </div>
+                    </Card>
+                  </a>
+                );
+              })}
+            </div>
+          </Section>
+        )}
+      </div>
+
+      {/* ─── Settings drawer ────────────────────────────────────────────── */}
+      {drawer === "settings" && (
+        <Drawer onClose={() => setDrawer(null)} title="Settings" subtitle={lichessUser ? `Connected as ${lichessUser}` : "Not connected"}>
+          <DrawerField label="Anthropic API key" hint={apiKey ? "saved" : undefined}>
+            <DrawerInputRow
+              type={keyVisible ? "text" : "password"}
+              value={keyDraft}
+              onChange={setKeyDraft}
+              onBlur={saveApiKey}
+              onEnter={saveApiKey}
+              placeholder="sk-ant-…"
+              monospace
+              toggleLabel={keyVisible ? "hide" : "show"}
+              onToggle={() => setKeyVisible((v) => !v)}
+            />
+          </DrawerField>
+
+          <DrawerField label="Lichess personal token" hint={lichessUser ?? undefined}>
+            <DrawerInputRow
+              type={lichessVisible ? "text" : "password"}
+              value={lichessDraft}
+              onChange={setLichessDraft}
+              onBlur={saveLichessToken}
+              onEnter={saveLichessToken}
+              placeholder="lip_…"
+              monospace
+              toggleLabel={lichessVisible ? "hide" : "show"}
+              onToggle={() => setLichessVisible((v) => !v)}
+            />
+            {lichessError && <div style={{ fontSize: 12, color: k.bad, marginTop: 6 }}>{lichessError}</div>}
+            <div style={{ fontSize: 11, color: k.textDim, marginTop: 8 }}>
+              Create at{" "}
+              <a href="https://lichess.org/account/oauth/token" target="_blank" rel="noopener noreferrer" style={{ color: k.accent }}>
+                lichess.org/account/oauth/token
+              </a>{" "}
+              — no scopes needed.
+            </div>
+          </DrawerField>
+
+          <div style={{ paddingTop: 12, borderTop: `1px solid ${k.hairline}`, marginTop: 8 }}>
+            <a href="https://github.com/n0nick/kibitz" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: k.textDim, textDecoration: "none" }}>
+              View on GitHub <ExtLinkIcon />
             </a>
           </div>
-        </div>
+        </Drawer>
+      )}
 
-        {/* Settings */}
-        <div className="border-t border-zinc-800 pt-4">
+      {/* ─── Add-game drawer ────────────────────────────────────────────── */}
+      {drawer === "add" && (
+        <Drawer onClose={() => setDrawer(null)} title="Add a game" subtitle="Paste a Lichess URL or a PGN">
+          <div style={{ marginBottom: 14 }}>
+            <textarea
+              value={url}
+              onChange={(e) => { setUrl(e.target.value); setError(null); }}
+              placeholder="https://lichess.org/… or paste a PGN"
+              rows={url.includes("\n") || url.length > 60 ? 6 : 1}
+              style={{
+                width: "100%",
+                background: k.surface,
+                border: `1px solid ${k.hairline}`,
+                borderRadius: 12,
+                padding: "12px 14px",
+                color: k.text,
+                fontSize: 14,
+                fontFamily: isPgn ? k.font.mono : k.font.sans,
+                outline: "none",
+                resize: "vertical",
+                minHeight: 44,
+              }}
+            />
+            {isPgn && (
+              <div style={{ fontSize: 11, color: k.accent, marginTop: 6, letterSpacing: 0.6, textTransform: "uppercase", fontWeight: 600 }}>PGN detected</div>
+            )}
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: k.textMute, marginBottom: 14, cursor: "pointer", userSelect: "none" }}>
+            <input
+              type="checkbox"
+              checked={forceReanalyze}
+              onChange={(e) => setForceReanalyze(e.target.checked)}
+              style={{ accentColor: k.accent }}
+            />
+            Re-analyze (overwrite saved)
+          </label>
+
           <button
-            onClick={() => setSettingsOpen((v) => !v)}
-            className="flex items-center justify-between w-full group"
+            onClick={handleUrlLoad}
+            disabled={loading || !canLoad}
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 12,
+              background: canLoad ? k.accent : k.surface2,
+              color: canLoad ? k.bg : k.textDim,
+              fontSize: 14,
+              fontWeight: 600,
+              border: "none",
+              cursor: canLoad && !loading ? "pointer" : "default",
+              transition: "opacity 0.15s",
+              opacity: loading ? 0.5 : 1,
+            }}
           >
-            <span className="text-xs text-zinc-500 uppercase tracking-widest">Settings</span>
-            <span className="flex items-center gap-3">
-              {!settingsOpen && (
-                <span className="flex items-center gap-2 text-[10px]">
-                  {apiKey && <span className="text-emerald-500">Anthropic ✓</span>}
-                  {lichessUser && <span className="text-emerald-500">Lichess ✓</span>}
-                </span>
-              )}
-              <span className="text-zinc-600 group-hover:text-zinc-400 transition-colors text-xs">
-                {settingsOpen ? "▲" : "▼"}
-              </span>
-            </span>
+            {loading ? "Loading…" : "Open game →"}
           </button>
-          {settingsOpen && (
-            <div className="mt-4 space-y-4">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs text-zinc-600">Anthropic API key</label>
-                  {apiKey && <span className="text-[10px] text-emerald-500">saved</span>}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type={keyVisible ? "text" : "password"}
-                    value={keyDraft}
-                    onChange={(e) => setKeyDraft(e.target.value)}
-                    onBlur={saveApiKey}
-                    onKeyDown={(e) => e.key === "Enter" && saveApiKey()}
-                    placeholder="sk-ant-…"
-                    className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
-                  />
-                  <button onClick={() => setKeyVisible((v) => !v)} className="px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs">
-                    {keyVisible ? "hide" : "show"}
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs text-zinc-600">Lichess personal token</label>
-                  {lichessUser && <span className="text-[10px] text-emerald-500">{lichessUser}</span>}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type={lichessVisible ? "text" : "password"}
-                    value={lichessDraft}
-                    onChange={(e) => setLichessDraft(e.target.value)}
-                    onBlur={saveLichessToken}
-                    onKeyDown={(e) => e.key === "Enter" && saveLichessToken()}
-                    placeholder="lip_…"
-                    className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors font-mono"
-                  />
-                  <button onClick={() => setLichessVisible((v) => !v)} className="px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-300 transition-colors text-xs">
-                    {lichessVisible ? "hide" : "show"}
-                  </button>
-                </div>
-                {lichessError && <p className="text-xs text-red-400">{lichessError}</p>}
-                <p className="text-xs text-zinc-600">Create at <a href="https://lichess.org/account/oauth/token" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-zinc-400 transition-colors">lichess.org/account/oauth/token</a> — no scopes needed.</p>
-              </div>
-            </div>
-          )}
+
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${k.hairline}` }}>
+            <button
+              onClick={() => { setDrawer(null); onDemo(); }}
+              style={{
+                width: "100%", textAlign: "left",
+                background: k.surface2, color: k.text, border: "none",
+                borderRadius: 12, padding: 12,
+                fontFamily: k.font.sans, fontSize: 14, fontWeight: 500,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
+              }}
+            >
+              <span style={{ width: 32, height: 32, borderRadius: 8, background: k.accentDim, color: k.accent, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>♞</span>
+              <span style={{ flex: 1 }}>
+                <span style={{ display: "block" }}>Try the Opera Game</span>
+                <span style={{ display: "block", fontSize: 11, color: k.textMute, fontWeight: 400, marginTop: 2 }}>Morphy vs Duke Karl, 1858 · no signup</span>
+              </span>
+              <span style={{ color: k.textDim }}>›</span>
+            </button>
+          </div>
+        </Drawer>
+      )}
+    </div>
+  );
+}
+
+// ─── Small drawer used by Settings + Add-game ────────────────────────────────
+
+function Drawer({ children, onClose, title, subtitle }) {
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+          backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+          zIndex: 40,
+        }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: "fixed", left: 0, right: 0, bottom: 0,
+          maxHeight: "85vh", overflowY: "auto",
+          background: k.surface, color: k.text,
+          borderTopLeftRadius: 22, borderTopRightRadius: 22,
+          boxShadow: "0 -8px 32px rgba(0,0,0,0.45)",
+          padding: "10px 18px 28px",
+          fontFamily: k.font.sans,
+          zIndex: 41,
+          maxWidth: 540,
+          margin: "0 auto",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "center", padding: "6px 0 10px" }}>
+          <span style={{ width: 42, height: 4, borderRadius: 2, background: k.surface3 }} />
         </div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 600 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 12, color: k.textMute, marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{ background: "transparent", border: "none", color: k.textMute, fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 4 }}
+          >
+            ×
+          </button>
+        </div>
+        {children}
       </div>
+    </>
+  );
+}
+
+function DrawerField({ label, hint, children }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <label className="kbz-caps">{label}</label>
+        {hint && <span style={{ fontSize: 10, color: k.accent, fontWeight: 600 }}>{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function DrawerInputRow({ type, value, onChange, onBlur, onEnter, placeholder, monospace, toggleLabel, onToggle }) {
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
+        placeholder={placeholder}
+        style={{
+          flex: 1, minWidth: 0,
+          background: k.surface2, color: k.text,
+          border: `1px solid ${k.hairline}`,
+          borderRadius: 10,
+          padding: "10px 12px",
+          fontFamily: monospace ? k.font.mono : k.font.sans,
+          fontSize: 14,
+          outline: "none",
+        }}
+      />
+      {onToggle && (
+        <button
+          onClick={onToggle}
+          style={{
+            padding: "0 12px",
+            background: k.surface2, color: k.textMute,
+            border: `1px solid ${k.hairline}`, borderRadius: 10,
+            fontSize: 12, cursor: "pointer",
+            fontFamily: k.font.sans,
+          }}
+        >
+          {toggleLabel}
+        </button>
+      )}
     </div>
   );
 }
@@ -648,8 +965,15 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-      <p className="text-zinc-500 text-sm">Loading game…</p>
+    <div style={{
+      minHeight: "100vh", background: k.bg, color: k.text,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: k.font.sans,
+    }}>
+      <div style={{ textAlign: "center" }}>
+        <div className="kbz-editorial" style={{ fontSize: 22, marginBottom: 6 }}>Loading game…</div>
+        <div style={{ fontSize: 12, color: k.textMute }}>Fetching PGN and engine evals.</div>
+      </div>
     </div>
   );
 }

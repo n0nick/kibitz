@@ -2,11 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  -webkit-tap-highlight-color: transparent;
+:root {
+  --kbz-bg: #0E0F10;
+  --kbz-surface: #17181B;
+  --kbz-surface-2: #1F2024;
+  --kbz-surface-3: #26272C;
+  --kbz-text: #E8E7E3;
+  --kbz-text-mute: #9A9994;
+  --kbz-text-dim: #5F5E5A;
+  --kbz-hairline: rgba(255,255,255,0.07);
+  --kbz-accent: #7FD1A8;
+  --kbz-accent-dim: rgba(127,209,168,0.16);
+  --kbz-warn: #E8B14A;
+  --kbz-bad: #D77467;
+  --kbz-win: #7FD1A8;
+  --kbz-loss: #D77467;
+  --kbz-draw: #A8A39A;
+  --kbz-sans: "Geist", -apple-system, system-ui, sans-serif;
+  --kbz-editorial: "Newsreader", "Geist", serif;
+  --kbz-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
 }
 
-/* Prevent iOS Safari from auto-zooming on input focus */
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
 input, textarea, select {
   font-size: 16px !important;
 }
@@ -18,25 +39,48 @@ html, body, #root {
 }
 
 body {
-  background-color: #09090b;
-  color: #f4f4f5;
+  background-color: var(--kbz-bg);
+  color: var(--kbz-text);
+  font-family: var(--kbz-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.report-body h2 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: #f4f4f5; }
-.report-body h3 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.4rem; color: #d4d4d8; }
+/* Editorial display headings — used by the hero / overview narrative */
+.kbz-editorial {
+  font-family: var(--kbz-editorial);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.2px;
+  text-wrap: pretty;
+}
+
+.kbz-mono { font-family: var(--kbz-mono); font-variant-numeric: tabular-nums; }
+.kbz-caps {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--kbz-text-mute);
+}
+
+@keyframes kbz-pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+@keyframes kbz-bounce { 0%,80%,100% { opacity: .3; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }
+
+.report-body h2 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--kbz-text); }
+.report-body h3 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.4rem; color: var(--kbz-text); }
 .report-body p  { margin: 0.4rem 0; }
-.report-body strong { color: #f4f4f5; }
-.report-body a  { color: #60a5fa; text-decoration: underline; }
-.report-body blockquote { border-left: 3px solid #3f3f46; padding-left: 0.75rem; color: #a1a1aa; margin: 0.5rem 0; }
-.report-body pre { background: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 0.5rem 0; }
+.report-body strong { color: var(--kbz-text); }
+.report-body a  { color: var(--kbz-accent); text-decoration: underline; }
+.report-body blockquote { border-left: 3px solid var(--kbz-hairline); padding-left: 0.75rem; color: var(--kbz-text-mute); margin: 0.5rem 0; }
+.report-body pre { background: var(--kbz-surface); border: 1px solid var(--kbz-hairline); border-radius: 6px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 0.5rem 0; }
 .report-body .code-wrapper { position: relative; }
-.report-body .copy-btn { position: absolute; top: 0.4rem; right: 0.4rem; padding: 0.3rem; border-radius: 4px; background: rgba(63,63,70,0.7); color: #a1a1aa; border: none; cursor: pointer; opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s; line-height: 0; }
+.report-body .copy-btn { position: absolute; top: 0.4rem; right: 0.4rem; padding: 0.3rem; border-radius: 4px; background: rgba(63,63,70,0.7); color: var(--kbz-text-mute); border: none; cursor: pointer; opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s; line-height: 0; }
 .report-body .code-wrapper:hover .copy-btn { opacity: 1; }
-.report-body .copy-btn:hover { background: rgba(82,82,91,0.9); color: #f4f4f5; }
-.report-body .copy-btn.copied { color: #4ade80; }
-.report-body code { font-family: ui-monospace, monospace; font-size: 0.8rem; }
+.report-body .copy-btn:hover { background: rgba(82,82,91,0.9); color: var(--kbz-text); }
+.report-body .copy-btn.copied { color: var(--kbz-accent); }
+.report-body code { font-family: var(--kbz-mono); font-size: 0.8rem; }
 .report-body ul { list-style: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
 .report-body li { margin: 0.2rem 0; }
 .report-body details { margin: 0.5rem 0; }
-.report-body summary { cursor: pointer; color: #a1a1aa; }
+.report-body summary { cursor: pointer; color: var(--kbz-text-mute); }

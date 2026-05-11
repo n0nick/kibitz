@@ -1,126 +1,36 @@
 import { useState, useEffect, useRef, useContext } from "react";
-import { analyzeSinglePosition, chatAboutPosition, DEFAULT_MODEL, PROMPT_VERSION, ANNOTATION_RULES } from "./analyzeGame";
+import { analyzeSinglePosition, chatAboutPosition, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
 import { computeSingleMoveEngineData } from "./pipeline";
-import { browserEngine, engineLineText, analyzePosition } from "./stockfish";
+import { browserEngine } from "./stockfish";
 import { sanToSquares } from "./parseGame";
 import { FlagButton } from "./FlagButton";
 import { perMoveKey } from "./migrations";
 import { GameContext } from "./context";
+import {
+  k, Card, NavBar, Classification, ThemedBoard, EvalBar,
+  Composer, ExtLinkIcon, CLASS_DEF,
+} from "./ui";
 
-// ─── Helpers shared with overview ────────────────────────────────────────────
-
-export const PIECE_NAMES = { K: "king", Q: "queen", R: "rook", B: "bishop", N: "knight", P: "pawn" };
-export const pieceImg = (p) => `/pieces/${p === p.toUpperCase() ? "white" : "black"}-${PIECE_NAMES[p.toUpperCase()]}.svg`;
-
+// ─── Re-exports kept for backwards-compat with other modules ────────────────
+// (GameOverview imports CLS from here for its turning-point card.)
 export const CLS = {
-  brilliant:  { label: "Brilliant!!", icon: "✦", bg: "bg-indigo-500/20",  text: "text-indigo-400",  border: "border-indigo-500/40"  },
-  great:      { label: "Great move",  icon: "!",  bg: "bg-sky-500/20",    text: "text-sky-400",     border: "border-sky-500/40"     },
-  good:       { label: "Good",        icon: "✓", bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/40" },
-  inaccuracy: { label: "Inaccuracy",  icon: "?!", bg: "bg-yellow-500/20", text: "text-yellow-400",  border: "border-yellow-500/40"  },
-  mistake:    { label: "Mistake",     icon: "?",  bg: "bg-orange-500/20", text: "text-orange-400",  border: "border-orange-500/40"  },
-  blunder:    { label: "Blunder",     icon: "??", bg: "bg-red-500/20",    text: "text-red-400",     border: "border-red-500/40"     },
+  brilliant:  { label: "Brilliant", icon: CLASS_DEF.brilliant.glyph,  bg: "transparent", text: "text-emerald-400", border: "transparent" },
+  great:      { label: "Great",     icon: CLASS_DEF.great.glyph,      bg: "transparent", text: "text-sky-400",     border: "transparent" },
+  good:       { label: "Good",      icon: CLASS_DEF.good.glyph,       bg: "transparent", text: "text-zinc-400",    border: "transparent" },
+  inaccuracy: { label: "Inaccuracy",icon: CLASS_DEF.inaccuracy.glyph, bg: "transparent", text: "text-yellow-400",  border: "transparent" },
+  mistake:    { label: "Mistake",   icon: CLASS_DEF.mistake.glyph,    bg: "transparent", text: "text-orange-400",  border: "transparent" },
+  blunder:    { label: "Blunder",   icon: CLASS_DEF.blunder.glyph,    bg: "transparent", text: "text-red-400",     border: "transparent" },
 };
 
-export function Chip({ classification, small }) {
-  const s = CLS[classification] ?? CLS.good;
-  return (
-    <span className={`inline-flex items-center gap-1 font-medium rounded-full border ${s.bg} ${s.text} ${s.border} ${small ? "text-[10px] px-2 py-0.5" : "text-xs px-2.5 py-1"}`}>
-      <span className="opacity-70">{s.icon}</span>{s.label}
-    </span>
-  );
+export function Chip({ classification }) {
+  return <Classification kind={classification} size={11} />;
 }
 
-function parseFen(fen) {
-  const rows = fen.split(" ")[0].split("/");
-  return rows.map((row) => {
-    const rank = [];
-    for (const ch of row) {
-      const n = parseInt(ch, 10);
-      if (!isNaN(n)) for (let i = 0; i < n; i++) rank.push(null);
-      else rank.push(ch);
-    }
-    return rank;
-  });
-}
+export const Board = ThemedBoard;
 
-export function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hoverToSq, analysisHref, flip = false, hideLink = false }) {
-  const board = parseFen(fen);
-  return (
-    <div className="w-full mx-auto select-none"
-      style={{ padding: 8, background: "#1e1008", borderRadius: 6, boxShadow: "0 8px 40px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
-      <div className="grid rounded-sm overflow-hidden" style={{ gridTemplateColumns: "repeat(8, 1fr)" }}>
-        {Array.from({ length: 8 }, (_, ri) => {
-          const rankNum = flip ? ri + 1 : 8 - ri;
-          return Array.from({ length: 8 }, (_, fi) => {
-            const fileIdx = flip ? 7 - fi : fi;
-            const piece = board[flip ? 7 - ri : ri]?.[fileIdx];
-            const light = (ri + fi) % 2 === 0;
-            const sq = `${"abcdefgh"[fileIdx]}${rankNum}`;
-            const isMove  = sq === fromSq    || sq === toSq;
-            const isAlt   = sq === altFromSq  || sq === altToSq;
-            const isHover = sq === hoverFromSq || (hoverToSq ? sq === hoverToSq : false);
-            return (
-              <div key={`${ri}-${fi}`} className="aspect-square relative"
-                style={{ background: light ? "#f0d9b5" : "#a07040" }}>
-                {isMove  && <div className="absolute inset-0" style={{ background: "rgba(210,175,0,0.48)" }} />}
-                {isAlt   && <div className="absolute inset-0" style={{ background: "rgba(20,140,200,0.42)" }} />}
-                {isHover && <div className="absolute inset-0" style={{ background: "rgba(140,80,220,0.40)" }} />}
-                {fi === 0 && (
-                  <span className="absolute top-[2px] left-[3px] text-[9px] font-bold leading-none pointer-events-none z-10"
-                    style={{ color: light ? "#8a6030" : "#d4a870" }}>{rankNum}</span>
-                )}
-                {ri === 7 && (
-                  <span className="absolute bottom-[2px] right-[3px] text-[9px] font-bold leading-none pointer-events-none z-10"
-                    style={{ color: light ? "#8a6030" : "#d4a870" }}>{"abcdefgh"[fileIdx]}</span>
-                )}
-                {piece && (
-                  <img src={pieceImg(piece)} alt={piece} className="absolute inset-0 w-full h-full p-[5%] z-10"
-                    draggable={false} style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.55))" }} />
-                )}
-              </div>
-            );
-          });
-        }).flat()}
-      </div>
-      {!hideLink && (
-        <div className="flex justify-end pt-1 pr-0.5">
-          <a href={analysisHref ?? `https://lichess.org/analysis/${fen.replace(/ /g, "_")}`}
-            target="_blank" rel="noopener noreferrer"
-            className="text-[9px] leading-none font-medium transition-colors"
-            style={{ color: "#6b4e2a" }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "#a0784a"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "#6b4e2a"; }}
-            title="Open position in Lichess Analysis Board">
-            {analysisHref ? "lichess ↗" : "analyze ↗"}
-          </a>
-        </div>
-      )}
-    </div>
-  );
-}
+export function EvalBarLegacy(props) { return <EvalBar {...props} />; }
 
-export function EvalBar({ before, after, perspective }) {
-  const fmt = (v) => v >= 99 ? "M" : v <= -99 ? "-M" : v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
-  const toPercent = (v) => v >= 99 ? 95 : v <= -99 ? 5 : ((Math.max(-6, Math.min(6, v)) + 6) / 12) * 100;
-  const pct = toPercent(after);
-  const isMateAfter  = after >= 99;
-  const isMatedAfter = after <= -99;
-  const swing = isMateAfter ? 99 - before : isMatedAfter ? -99 - before : after - before;
-  // positive swing = White gaining; for Black player that means losing ground
-  const gaining = perspective === 'black' ? swing < 0 : swing > 0;
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="text-xs font-mono tabular-nums text-zinc-500 w-9 text-right shrink-0">{fmt(before)}</span>
-      <div className="flex-1 h-2 rounded-full bg-zinc-800 overflow-hidden">
-        <div className="h-full rounded-full bg-zinc-200 transition-all duration-700 ease-out" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs font-mono tabular-nums text-zinc-300 w-9 shrink-0">{fmt(after)}</span>
-      <span className={`text-xs font-semibold w-12 text-right shrink-0 ${gaining ? "text-emerald-400" : "text-red-400"}`}>
-        {isMateAfter  ? "▲ M" : isMatedAfter ? "▼ M" : <>{gaining ? "▲" : "▼"} {Math.min(Math.abs(swing), 9.9).toFixed(1)}</>}
-      </span>
-    </div>
-  );
-}
+// ─── Annotated text helpers ─────────────────────────────────────────────────
 
 function parseAnnotation(raw, fenBefore, fenAfter) {
   const sq = (s) => (/^[a-h][1-8]$/.test(s) ? s : null);
@@ -142,23 +52,28 @@ function parseAnnotation(raw, fenBefore, fenAfter) {
 export function AnnotatedText({ text, onHover, fenBefore, fenAfter }) {
   if (!text) return null;
   const parts = text.split(/(\[\[[^\]]*\]\])/);
-  return (
-    <>
-      {parts.map((part, i) => {
-        const match = part.match(/^\[\[([^\]]*)\]\]$/);
-        if (!match) return <span key={i}>{part}</span>;
-        const { display, from, to } = parseAnnotation(match[1], fenBefore, fenAfter);
-        return (
-          <span key={i}
-            className="underline decoration-dotted underline-offset-2 cursor-pointer text-zinc-200 hover:text-white transition-colors"
-            onMouseEnter={() => onHover({ from, to })}
-            onMouseLeave={() => onHover(null)}>
-            {display}
-          </span>
-        );
-      })}
-    </>
-  );
+  return parts.map((part, i) => {
+    const match = part.match(/^\[\[([^\]]*)\]\]$/);
+    if (!match) return <span key={i}>{part}</span>;
+    const { display, from, to } = parseAnnotation(match[1], fenBefore, fenAfter);
+    return (
+      <span
+        key={i}
+        style={{
+          color: k.text,
+          background: k.accentDim,
+          padding: "0 4px",
+          borderRadius: 3,
+          fontWeight: 500,
+          cursor: "pointer",
+        }}
+        onMouseEnter={() => onHover?.({ from, to })}
+        onMouseLeave={() => onHover?.(null)}
+      >
+        {display}
+      </span>
+    );
+  });
 }
 
 function RichText({ text, onHover, fenBefore, fenAfter }) {
@@ -166,28 +81,57 @@ function RichText({ text, onHover, fenBefore, fenAfter }) {
   function renderInline(str) {
     const tokens = str.split(/(\[\[[^\]]*\]\]|\*\*[^*]+\*\*|\*[^*]+\*)/);
     return tokens.map((token, i) => {
+      if (!token) return null;
       if (token.startsWith("[[") && token.endsWith("]]")) {
         const { display, from, to } = parseAnnotation(token.slice(2, -2), fenBefore, fenAfter);
         return (
-          <span key={i} className="underline decoration-dotted underline-offset-2 cursor-pointer text-zinc-200 hover:text-white transition-colors"
-            onMouseEnter={() => onHover?.({ from, to })} onMouseLeave={() => onHover?.(null)}>{display}</span>
+          <span
+            key={i}
+            style={{ color: k.text, background: k.accentDim, padding: "0 4px", borderRadius: 3, fontWeight: 500, cursor: "pointer" }}
+            onMouseEnter={() => onHover?.({ from, to })}
+            onMouseLeave={() => onHover?.(null)}
+          >
+            {display}
+          </span>
         );
       }
-      if (token.startsWith("**") && token.endsWith("**")) return <strong key={i} className="font-semibold text-zinc-200">{renderInline(token.slice(2, -2))}</strong>;
-      if (token.startsWith("*") && token.endsWith("*") && token.length > 2) return <em key={i} className="italic">{renderInline(token.slice(1, -1))}</em>;
+      if (token.startsWith("**") && token.endsWith("**")) {
+        return <strong key={i} style={{ fontWeight: 600, color: k.text }}>{renderInline(token.slice(2, -2))}</strong>;
+      }
+      if (token.startsWith("*") && token.endsWith("*") && token.length > 2) {
+        return <em key={i} style={{ fontStyle: "italic" }}>{renderInline(token.slice(1, -1))}</em>;
+      }
       return <span key={i}>{token}</span>;
     });
   }
-  const elements = [];
-  for (const [i, line] of text.split("\n").entries()) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const heading = trimmed.match(/^#{1,3}\s+(.+)/);
-    if (heading) elements.push(<p key={i} className="font-semibold text-zinc-200">{renderInline(heading[1])}</p>);
-    else elements.push(<p key={i} className="leading-relaxed">{renderInline(trimmed)}</p>);
-  }
-  return <div className="space-y-1.5">{elements}</div>;
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {lines.map((line, i) => {
+        const heading = line.match(/^#{1,3}\s+(.+)/);
+        const bullet = line.match(/^[-*]\s+(.+)/);
+        if (heading) {
+          return (
+            <div key={i} className="kbz-caps" style={{ marginTop: i > 0 ? 4 : 0, color: k.textMute }}>
+              {renderInline(heading[1])}
+            </div>
+          );
+        }
+        if (bullet) {
+          return (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ color: k.accent, lineHeight: 1.5 }}>•</span>
+              <span style={{ flex: 1, lineHeight: 1.5 }}>{renderInline(bullet[1])}</span>
+            </div>
+          );
+        }
+        return <p key={i} style={{ margin: 0, lineHeight: 1.55 }}>{renderInline(line)}</p>;
+      })}
+    </div>
+  );
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function gameSource(id) {
   if (!id || id === "opera-1858") return "demo";
@@ -197,13 +141,24 @@ function gameSource(id) {
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
+function stripAnnotations(text) {
+  if (!text) return text;
+  return text.replace(/\[\[([^\]|]*?)(?:\|[^\]]*?)?\]\]/g, "$1");
+}
+
+// First sentence of the explanation — promoted to an editorial headline.
+function firstSentence(text) {
+  if (!text) return null;
+  const stripped = stripAnnotations(text);
+  const m = stripped.match(/^[^.!?]*[.!?]/);
+  return (m ? m[0] : stripped).trim();
+}
+
 // ─── MoveAnalysisView ─────────────────────────────────────────────────────────
-// Renders full analysis for a single ply. Used in drill-in route and old review.
-// Manages its own analysis state, pulling from/saving to localStorage.
 
 export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective, onBack, analysisStatus, onPatchMoment, turningPoints = [] }) {
   const game = useContext(GameContext);
-  const { positions, evals, moments, momentByMoveIdx, summary, pgn, promptSentToLlm, momentEngineData } = game;
+  const { positions, evals, momentByMoveIdx, summary, pgn, promptSentToLlm, momentEngineData } = game;
 
   const [plyIdx, setPlyIdx] = useState(initialPly ?? 1);
 
@@ -222,10 +177,9 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const chatEndRef = useRef(null);
-  const rightPanelRef = useRef(null);
-  const engineTimerRef = useRef(null);
+  const scrollerRef = useRef(null);
 
-  const flip = perspective === 'black';
+  const flip = perspective === "black";
   const fenBefore = positions[plyIdx - 1]?.fen;
   const fenAfter = currentPos?.fen;
   const altHighlight = currentMoment?.betterMoves?.[expandedAlt]
@@ -235,7 +189,6 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
   const turningPointSet = new Set(turningPoints);
   const isKeyMoment = turningPointSet.has(plyIdx);
 
-  // Reset per-ply state and load cache when plyIdx changes
   useEffect(() => {
     setAnalysisText(null);
     setAnalysisPrompt(null);
@@ -248,7 +201,7 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
     setChatHistory([]);
     setChatInput("");
     setChatSending(false);
-    rightPanelRef.current?.scrollTo({ top: 0 });
+    scrollerRef.current?.scrollTo({ top: 0 });
 
     const moment = momentByMoveIdx[plyIdx];
     if (!moment?.explanation) {
@@ -261,25 +214,21 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
         }
       } catch {}
     }
-
-  }, [plyIdx, gameId, tone]);
+  }, [plyIdx, gameId, tone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const touchStartX = useRef(null);
 
-  // Keyboard navigation
   useEffect(() => {
     const onKey = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (e.key === 'ArrowLeft') setPlyIdx(p => Math.max(1, p - 1));
-      if (e.key === 'ArrowRight') setPlyIdx(p => Math.min(positions.length - 1, p + 1));
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.key === "ArrowLeft") setPlyIdx((p) => Math.max(1, p - 1));
+      if (e.key === "ArrowRight") setPlyIdx((p) => Math.min(positions.length - 1, p + 1));
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [positions.length]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatHistory]);
 
   const runAnalysis = async () => {
     if (!apiKey) return;
@@ -288,37 +237,23 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
     try {
       const engData = perMoveEngData ?? await computeSingleMoveEngineData(
         positions, plyIdx, browserEngine,
-        { lichessGameId: gameSource(gameId) === 'lichess' ? gameId : null }
+        { lichessGameId: gameSource(gameId) === "lichess" ? gameId : null }
       ).catch(() => null);
       if (engData && !perMoveEngData) setPerMoveEngData(engData);
 
       if (currentMoment) {
         const { text, prompt } = await analyzeSinglePosition({
-          summary,
-          moveNumber: currentMoment.moveNumber,
-          notation: currentMoment.notation,
-          classification: currentMoment.classification,
-          evalBefore: evals[plyIdx - 1] ?? 0,
-          evalAfter: evals[plyIdx],
-          fen: fenAfter,
-          tone,
-          engineData: engData,
-          perspective,
+          summary, moveNumber: currentMoment.moveNumber, notation: currentMoment.notation,
+          classification: currentMoment.classification, evalBefore: evals[plyIdx - 1] ?? 0,
+          evalAfter: evals[plyIdx], fen: fenAfter, tone, engineData: engData, perspective,
         }, apiKey);
         onPatchMoment?.(currentMoment.id, text, prompt);
       } else {
         const mn = `${Math.ceil(plyIdx / 2)}${plyIdx % 2 === 1 ? "." : "..."}`;
         const { text, prompt } = await analyzeSinglePosition({
-          summary,
-          moveNumber: mn,
-          notation: currentPos.san,
-          classification: "good",
-          evalBefore: evals[plyIdx - 1] ?? 0,
-          evalAfter: evals[plyIdx],
-          fen: fenAfter,
-          tone,
-          engineData: engData,
-          perspective,
+          summary, moveNumber: mn, notation: currentPos.san, classification: "good",
+          evalBefore: evals[plyIdx - 1] ?? 0, evalAfter: evals[plyIdx],
+          fen: fenAfter, tone, engineData: engData, perspective,
         }, apiKey);
         setAnalysisText(text);
         setAnalysisPrompt(prompt);
@@ -338,47 +273,41 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
     setChatSending(true);
     setChatInput("");
     const currentMsgs = [...chatHistory];
-    setChatHistory(prev => [...prev, { role: "user", text: q }]);
+    setChatHistory((prev) => [...prev, { role: "user", text: q }]);
     try {
       const fenCurrent = fenAfter ?? fenBefore;
-      // Load 10-PV engine data lazily on first chat message
       let engData = richEngData;
       if (!engData && fenCurrent) {
         engData = await computeSingleMoveEngineData(positions, plyIdx, browserEngine, {
-          depth: 14,
-          lichessGameId: gameSource(gameId) === 'lichess' ? gameId : null,
-          numPv: 10,
+          depth: 14, lichessGameId: gameSource(gameId) === "lichess" ? gameId : null, numPv: 10,
         }).catch(() => null);
         if (engData) setRichEngData(engData);
       }
-      const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
+      const fmtCp = (cp) => cp == null ? "?" : `${cp >= 0 ? "+" : ""}${(cp / 100).toFixed(1)}`;
       const engineLine = engData?.top_alternatives?.length
         ? `Top ${engData.top_alternatives.length} engine moves at this position:\n` +
           engData.top_alternatives.map((alt, i) => {
-            const ev = alt.mate != null ? (alt.mate > 0 ? '+M' : '-M') : fmtCp(alt.eval_cp);
-            const cont = alt.pv_san?.slice(1, 4).join(' ');
-            return `  ${i + 1}. ${alt.san} (${ev})${cont ? ` — continuation: ${cont}` : ''}`;
-          }).join('\n') +
+            const ev = alt.mate != null ? (alt.mate > 0 ? "+M" : "-M") : fmtCp(alt.eval_cp);
+            const cont = alt.pv_san?.slice(1, 4).join(" ");
+            return `  ${i + 1}. ${alt.san} (${ev})${cont ? ` — continuation: ${cont}` : ""}`;
+          }).join("\n") +
           `\nSystem prompt for chat: You have engine evaluations for the top ${engData.top_alternatives.length} candidate moves at this position. If the user asks about a move not in this list, acknowledge that you don't have engine-verified analysis for that move and respond cautiously based on general principles. Do not invent tactical sequences.`
         : null;
 
       const moment = currentMoment ?? {
-        id: `pos-${plyIdx}`,
-        moveIdx: plyIdx,
+        id: `pos-${plyIdx}`, moveIdx: plyIdx,
         moveNumber: `${Math.ceil(plyIdx / 2)}${plyIdx % 2 === 1 ? "." : "..."}`,
-        notation: currentPos.san,
-        classification: "good",
-        explanation: analysisText ?? null,
-        qa: null,
+        notation: currentPos.san, classification: "good",
+        explanation: analysisText ?? null, qa: null,
       };
 
       const { text: answer, systemPrompt } = await chatAboutPosition(
         { summary, moment, messages: currentMsgs, question: q, tone, fen: fenCurrent, engineLine, perspective },
         apiKey
       );
-      setChatHistory(prev => [...prev, { role: "assistant", text: answer, systemPrompt }]);
+      setChatHistory((prev) => [...prev, { role: "assistant", text: answer, systemPrompt }]);
     } catch {
-      setChatHistory(prev => [...prev, { role: "assistant", text: "Analysis failed. Check your API key." }]);
+      setChatHistory((prev) => [...prev, { role: "assistant", text: "Analysis failed. Check your API key." }]);
     } finally {
       setChatSending(false);
     }
@@ -390,200 +319,334 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
     ? `${currentMoment.moveNumber} ${currentMoment.notation}`
     : `${Math.ceil(plyIdx / 2)}${plyIdx % 2 === 1 ? "." : "..."} ${currentPos?.san}`;
   const classification = currentMoment?.classification ?? "good";
+  const cdef = CLASS_DEF[classification] ?? CLASS_DEF.good;
   const suggestedQ = currentMoment?.qa?.question;
+  const headline = currentMoment?.headline ?? firstSentence(explanation);
 
   if (!currentPos) return null;
 
+  const moverIsWhite = plyIdx % 2 === 1;
+  const sideLabel = moverIsWhite ? "White" : "Black";
+
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden"
+    <div
+      ref={scrollerRef}
+      style={{
+        minHeight: "100vh", background: k.bg, color: k.text,
+        fontFamily: k.font.sans, paddingBottom: 96,
+      }}
       onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
       onTouchEnd={(e) => {
         if (touchStartX.current === null) return;
         const dx = e.changedTouches[0].clientX - touchStartX.current;
         touchStartX.current = null;
         if (Math.abs(dx) < 40) return;
-        if (dx < 0) setPlyIdx(p => Math.min(positions.length - 1, p + 1));
-        else setPlyIdx(p => Math.max(1, p - 1));
-      }}>
-      {/* Header */}
-      <div className="flex items-center bg-zinc-900/90 backdrop-blur border-b border-zinc-800 shrink-0 px-2">
-        <button onClick={onBack}
-          className="px-3 py-3.5 text-zinc-600 hover:text-zinc-300 transition-colors text-sm shrink-0">←</button>
-        <div className="flex-1 flex items-center gap-2.5 px-2 py-3.5 min-w-0">
-          <span className="text-sm font-mono font-semibold text-zinc-100 shrink-0">{moveLabel}</span>
-          <Chip classification={classification} small />
-          {isKeyMoment && <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest shrink-0">key</span>}
-        </div>
-        <div className="flex items-center gap-0.5 px-2 shrink-0">
-          <button onClick={() => setPlyIdx(p => Math.max(1, p - 1))} disabled={plyIdx <= 1}
-            className="px-2.5 py-2 text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:cursor-default transition-colors text-lg font-light leading-none select-none">{"←"}</button>
-          <span className="text-[10px] text-zinc-500 tabular-nums w-14 text-center font-mono">{plyIdx} / {positions.length - 1}</span>
-          <button onClick={() => setPlyIdx(p => Math.min(positions.length - 1, p + 1))} disabled={plyIdx >= positions.length - 1}
-            className="px-2.5 py-2 text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:cursor-default transition-colors text-lg font-light leading-none select-none">{"→"}</button>
-        </div>
-      </div>
+        if (dx < 0) setPlyIdx((p) => Math.min(positions.length - 1, p + 1));
+        else setPlyIdx((p) => Math.max(1, p - 1));
+      }}
+    >
+      <NavBar
+        left={
+          <button
+            onClick={onBack}
+            aria-label="Back"
+            style={{ background: "transparent", border: "none", color: k.textMute, fontSize: 20, lineHeight: 1, cursor: "pointer", padding: 4 }}
+          >
+            ‹
+          </button>
+        }
+        title={`Move ${Math.ceil(plyIdx / 2)} · ${sideLabel}`}
+        subtitle={isKeyMoment ? "The turning point" : moveLabel}
+        right={
+          gameSource(gameId) === "lichess" ? (
+            <a
+              href={`https://lichess.org/${gameId}#${plyIdx}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, color: k.accent, fontWeight: 500, textDecoration: "none" }}
+            >
+              Lichess <ExtLinkIcon size={9} />
+            </a>
+          ) : null
+        }
+      />
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto md:overflow-hidden md:flex">
-        {/* Left panel: board + eval bar */}
-        <div className="md:w-[420px] md:shrink-0 md:border-r md:border-zinc-800 md:overflow-y-auto">
-          <div className="px-4 pt-5 pb-3">
-            <Board
-              fen={currentPos.fen}
-              fromSq={currentPos.from}
-              toSq={currentPos.to}
-              altFromSq={altHighlight?.from}
-              altToSq={altHighlight?.to}
-              hoverFromSq={hoverHighlight?.from}
-              hoverToSq={hoverHighlight?.to}
-              flip={flip}
-              analysisHref={gameSource(gameId) === "lichess" ? `https://lichess.org/${gameId}#${plyIdx}` : undefined}
-            />
+      <div style={{ maxWidth: 540, margin: "0 auto" }}>
+        {/* Per-ply navigation */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "0 18px 8px" }}>
+          <button
+            onClick={() => setPlyIdx((p) => Math.max(1, p - 1))}
+            disabled={plyIdx <= 1}
+            style={{
+              background: k.surface2, color: plyIdx <= 1 ? k.textDim : k.text,
+              border: `1px solid ${k.hairline}`, borderRadius: 10, padding: "6px 12px",
+              fontSize: 14, cursor: plyIdx <= 1 ? "default" : "pointer",
+              opacity: plyIdx <= 1 ? 0.4 : 1,
+            }}
+          >
+            ←
+          </button>
+          <span style={{ fontFamily: k.font.mono, fontSize: 11, color: k.textMute, minWidth: 80, textAlign: "center" }}>
+            ply {plyIdx} / {positions.length - 1}
+          </span>
+          <button
+            onClick={() => setPlyIdx((p) => Math.min(positions.length - 1, p + 1))}
+            disabled={plyIdx >= positions.length - 1}
+            style={{
+              background: k.surface2, color: plyIdx >= positions.length - 1 ? k.textDim : k.text,
+              border: `1px solid ${k.hairline}`, borderRadius: 10, padding: "6px 12px",
+              fontSize: 14, cursor: plyIdx >= positions.length - 1 ? "default" : "pointer",
+              opacity: plyIdx >= positions.length - 1 ? 0.4 : 1,
+            }}
+          >
+            →
+          </button>
+        </div>
+
+        {/* Board */}
+        <div style={{ padding: "4px 18px 8px" }}>
+          <ThemedBoard
+            fen={currentPos.fen}
+            fromSq={currentPos.from}
+            toSq={currentPos.to}
+            altFromSq={altHighlight?.from}
+            altToSq={altHighlight?.to}
+            hoverFromSq={hoverHighlight?.from}
+            hoverToSq={hoverHighlight?.to}
+            highlight={currentPos.to}
+            flip={flip}
+            rounded={12}
+            showCoords
+            hideLink
+          />
+        </div>
+
+        {/* Classification + move notation */}
+        <div style={{ padding: "10px 22px 4px", display: "flex", alignItems: "center", gap: 10 }}>
+          <Classification kind={classification} size={12} />
+          <span style={{ flex: 1 }} />
+          <span style={{ fontFamily: k.font.mono, fontSize: 13, color: k.text, fontWeight: 600 }}>
+            {currentMoment?.moveNumber ?? `${Math.ceil(plyIdx / 2)}${plyIdx % 2 === 1 ? "." : "…"}`}
+            <span style={{ color: ["mistake", "blunder"].includes(classification) ? cdef.color : k.text }}>
+              {" "}{currentPos.san}
+            </span>
+          </span>
+        </div>
+
+        {/* Editorial headline */}
+        {headline && (
+          <div style={{ padding: "10px 22px 4px" }}>
+            <div className="kbz-editorial" style={{ fontSize: 19, lineHeight: 1.3, color: k.text }}>
+              {headline}
+            </div>
           </div>
-          <div className="px-4 pb-4">
-            <EvalBar before={evals[plyIdx - 1] ?? 0} after={evals[plyIdx]} perspective={perspective} />
-          </div>
+        )}
+
+        {/* Eval bar */}
+        <div style={{ padding: "10px 22px 12px" }}>
+          <EvalBar before={evals[plyIdx - 1] ?? 0} after={evals[plyIdx]} perspective={perspective} />
         </div>
 
-        {/* Right panel: commentary + chat */}
-        <div ref={rightPanelRef} className="md:flex-1 md:overflow-y-auto">
-        <div className="max-w-2xl mx-auto md:py-6 md:px-4">
+        {/* Analysis card */}
+        <div style={{ padding: "8px 16px 0" }}>
+          <Card pad={14}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span className="kbz-caps">Coach's read</span>
+              <span style={{ flex: 1 }} />
+              {explanation && (
+                <FlagButton context={{
+                  type: "moment", model: DEFAULT_MODEL, promptVersion: PROMPT_VERSION,
+                  gameId, pgn, promptSentToLlm: promptForFlag,
+                  move: moveLabel, ply: plyIdx, classification,
+                  evalBefore: evals[plyIdx - 1] ?? 0, evalAfter: evals[plyIdx],
+                  fenBefore, fenAfter, commentary: explanation,
+                  engineData: momentEngineData?.[plyIdx],
+                }} />
+              )}
+            </div>
 
-        {/* Commentary card */}
-        <div className="mx-4 mb-4 md:mx-0 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
-          <div className="px-4 py-4">
             {explanation ? (
-              <div>
-                <p className="text-sm text-zinc-300 leading-[1.75]">
-                  <AnnotatedText text={explanation} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
-                </p>
-                <div className="mt-2 flex justify-end">
-                  <FlagButton context={{
-                    type: 'moment',
-                    model: DEFAULT_MODEL,
-                    promptVersion: PROMPT_VERSION,
-                    gameId,
-                    pgn,
-                    promptSentToLlm: promptForFlag,
-                    move: moveLabel,
-                    ply: plyIdx,
-                    classification,
-                    evalBefore: evals[plyIdx - 1] ?? 0,
-                    evalAfter: evals[plyIdx],
-                    fenBefore,
-                    fenAfter,
-                    commentary: explanation,
-                    engineData: momentEngineData?.[plyIdx],
-                  }} />
-                </div>
+              <div style={{ fontSize: 14, color: k.text, lineHeight: 1.6 }}>
+                <AnnotatedText text={explanation} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
               </div>
             ) : loading ? (
-              <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
+              <div style={{ fontSize: 13, color: k.textDim, fontStyle: "italic", animation: "kbz-pulse 1.4s ease-in-out infinite" }}>
+                Analyzing…
+              </div>
             ) : error ? (
-              <p className="text-sm text-red-500/70">Analysis failed. Check your API key.</p>
+              <div style={{ fontSize: 13, color: k.bad }}>Analysis failed. Check your API key.</div>
             ) : analysisStatus === "loading" ? (
-              <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
+              <div style={{ fontSize: 13, color: k.textDim, fontStyle: "italic", animation: "kbz-pulse 1.4s ease-in-out infinite" }}>Analyzing…</div>
             ) : apiKey ? (
-              <button onClick={runAnalysis}
-                className="text-xs text-zinc-500 border border-zinc-700/60 rounded-xl px-4 py-2.5 hover:border-zinc-600 hover:text-zinc-300 transition-colors">
-                Analyze this move
+              <button
+                onClick={runAnalysis}
+                style={{
+                  background: k.surface2, color: k.text,
+                  border: `1px solid ${k.hairline}`, borderRadius: 10,
+                  padding: "8px 14px", fontSize: 13, fontWeight: 500,
+                  cursor: "pointer", fontFamily: k.font.sans,
+                }}
+              >
+                Analyze this move →
               </button>
             ) : (
-              <p className="text-sm text-zinc-600">Add an Anthropic API key on the import screen to enable AI analysis.</p>
+              <div style={{ fontSize: 13, color: k.textDim }}>
+                Add an Anthropic API key from settings to enable AI analysis.
+              </div>
             )}
-          </div>
 
-          {/* Better moves */}
-          {currentMoment?.betterMoves?.length > 0 && (
-            <div className="px-4 pb-4 border-t border-zinc-800/60 pt-3.5">
-              <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Better alternatives</div>
-              <div className="flex flex-wrap gap-2">
-                {currentMoment.betterMoves.map((alt, i) => (
-                  <div key={i} className="flex-1 min-w-[110px]">
-                    <button
-                      onClick={() => setExpandedAlt(expandedAlt === i ? null : i)}
-                      className={`w-full text-sm px-3.5 py-2.5 rounded-xl border transition-all font-mono font-semibold ${
-                        expandedAlt === i
-                          ? "bg-zinc-700 border-zinc-600 text-zinc-100"
-                          : "bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"
-                      }`}>
-                      {alt.move}
-                    </button>
-                    {expandedAlt === i && (
-                      <p className="mt-2 text-xs text-zinc-400 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 leading-relaxed">
-                        <AnnotatedText text={alt.reason} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
-                      </p>
-                    )}
-                  </div>
+            {/* Better line */}
+            {currentMoment?.betterMoves?.length > 0 && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${k.hairline}` }}>
+                <div className="kbz-caps" style={{ marginBottom: 8 }}>Better line</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {currentMoment.betterMoves.map((alt, i) => {
+                    const open = expandedAlt === i;
+                    return (
+                      <div key={i}>
+                        <button
+                          onClick={() => setExpandedAlt(open ? null : i)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 10,
+                            width: "100%", textAlign: "left",
+                            background: open ? k.surface2 : "transparent",
+                            color: k.text,
+                            border: `1px solid ${k.hairline}`,
+                            borderRadius: 10, padding: "9px 12px",
+                            fontFamily: k.font.mono, fontSize: 13, fontWeight: 500,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <span style={{ color: k.accent }}>{alt.move}</span>
+                          <span style={{ flex: 1, color: k.textMute, fontFamily: k.font.sans, fontSize: 12 }}>
+                            {open ? "Hide reasoning" : "Why this works"}
+                          </span>
+                          <span style={{ color: k.textDim, fontSize: 12 }}>{open ? "▲" : "▼"}</span>
+                        </button>
+                        {open && (
+                          <div style={{ marginTop: 6, fontSize: 13, color: k.textMute, lineHeight: 1.55, padding: "0 4px" }}>
+                            <AnnotatedText text={alt.reason} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Coach prompt seed card */}
+        {apiKey && chatHistory.length === 0 && (
+          <div style={{ padding: "12px 16px 0" }}>
+            <Card pad={14}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div
+                  style={{
+                    width: 28, height: 28, borderRadius: 14,
+                    background: k.accentDim, color: k.accent,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 14, flexShrink: 0,
+                  }}
+                >
+                  ✦
+                </div>
+                <div style={{ flex: 1, fontSize: 13, color: k.text }}>
+                  {suggestedQ ?? "Why did this feel right at the board?"}
+                </div>
+                <button
+                  onClick={() => setChatInput(suggestedQ ?? "Why did this feel right at the board?")}
+                  style={{ background: "transparent", border: "none", color: k.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Ask ›
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Chat divider */}
+        {(chatHistory.length > 0 || chatSending) && (
+          <div style={{ display: "flex", alignItems: "center", padding: "20px 22px 12px", gap: 12 }}>
+            <span style={{ flex: 1, height: 1, background: k.hairline }} />
+            <span className="kbz-caps" style={{ fontSize: 10, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ color: k.accent }}>✦</span>
+              Coach · talking about this move
+            </span>
+            <span style={{ flex: 1, height: 1, background: k.hairline }} />
+          </div>
+        )}
+
+        {(chatHistory.length > 0 || chatSending) && (
+          <div style={{ padding: "0 18px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {chatHistory.map((msg, i) => {
+              const isCoach = msg.role === "assistant";
+              return (
+                <div
+                  key={i}
+                  style={{
+                    alignSelf: isCoach ? "flex-start" : "flex-end",
+                    maxWidth: "82%",
+                    background: isCoach ? k.surface : k.accentDim,
+                    color: k.text,
+                    borderRadius: 16,
+                    padding: "12px 14px",
+                    fontSize: 14, lineHeight: 1.5,
+                    border: isCoach ? `1px solid ${k.hairline}` : "none",
+                  }}
+                >
+                  {isCoach ? (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <div className="kbz-caps" style={{ flex: 1, color: k.accent }}>Coach</div>
+                        <FlagButton context={{
+                          type: "chat", model: DEFAULT_MODEL, promptVersion: PROMPT_VERSION,
+                          gameId, pgn, promptSentToLlm: msg.systemPrompt,
+                          move: moveLabel, ply: plyIdx, classification,
+                          fenBefore, fenAfter, commentary: msg.text,
+                          chatHistory: chatHistory.slice(0, i),
+                        }} />
+                      </div>
+                      <RichText text={msg.text} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
+                    </>
+                  ) : (
+                    msg.text
+                  )}
+                </div>
+              );
+            })}
+            {chatSending && (
+              <div style={{ alignSelf: "flex-start", display: "flex", gap: 4, padding: "8px 14px" }}>
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    style={{
+                      width: 6, height: 6, borderRadius: 3, background: k.textDim,
+                      animation: `kbz-bounce 1.2s ease-in-out ${i * 0.15}s infinite`,
+                    }}
+                  />
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Chat */}
-        <div className="mx-4 mb-8 md:mx-0">
-          {/* Suggested question chip */}
-          {chatHistory.length === 0 && !chatSending && suggestedQ && (
-            <button
-              className="w-full text-left text-xs text-zinc-500 bg-zinc-900/50 rounded-xl px-4 py-3 mb-3 border border-zinc-800 hover:border-zinc-700 active:bg-zinc-800 transition-colors"
-              onClick={() => setChatInput(suggestedQ)}>
-              <span className="text-zinc-600">Try: </span>
-              <span className="italic">"{suggestedQ}"</span>
-            </button>
-          )}
-
-          {/* Chat messages */}
-          {(chatHistory.length > 0 || chatSending) && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl mb-3 overflow-hidden divide-y divide-zinc-800/70">
-              {chatHistory.map((msg, i) => (
-                <div key={i} className={`px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "text-zinc-300" : "text-zinc-400"}`}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className={`text-[9px] font-bold uppercase tracking-widest flex-1 ${msg.role === "user" ? "text-zinc-600" : "text-indigo-500"}`}>
-                      {msg.role === "user" ? "You" : "Coach"}
-                    </div>
-                    {msg.role === "assistant" && (
-                      <FlagButton context={{
-                        type: 'chat', model: DEFAULT_MODEL, promptVersion: PROMPT_VERSION,
-                        gameId, pgn, promptSentToLlm: msg.systemPrompt,
-                        move: moveLabel, ply: plyIdx, classification, fenBefore, fenAfter,
-                        commentary: msg.text, chatHistory: chatHistory.slice(0, i),
-                      }} />
-                    )}
-                  </div>
-                  {msg.role === "assistant"
-                    ? <RichText text={msg.text} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
-                    : <p>{msg.text}</p>}
-                </div>
-              ))}
-              {chatSending && (
-                <div className="px-4 py-3 text-sm text-zinc-500 italic animate-pulse">
-                  <div className="text-[9px] font-bold uppercase tracking-widest mb-1.5 text-indigo-500">Coach</div>
-                  Thinking…
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendChat()}
-              placeholder="Ask about this position…" disabled={chatSending}
-              className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 disabled:opacity-50 transition-colors" />
-            <button onClick={sendChat} disabled={chatSending || !chatInput.trim() || !apiKey}
-              className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 rounded-xl text-sm font-semibold transition-colors shrink-0">
-              Ask
-            </button>
+            )}
+            <div ref={chatEndRef} />
           </div>
-          {!apiKey && (
-            <p className="text-xs text-zinc-600 mt-2 text-center">Add an API key on the import screen to enable chat.</p>
-          )}
-        </div>
+        )}
 
-        </div>{/* max-w-2xl */}
-        </div>{/* right panel */}
-      </div>{/* body flex */}
+        {/* Sticky composer at bottom */}
+        <div style={{
+          position: "sticky", bottom: 0, marginTop: 16,
+          padding: "0 0 calc(env(safe-area-inset-bottom, 0) + 8px)",
+        }}>
+          <Composer
+            value={chatInput}
+            onChange={setChatInput}
+            onSend={sendChat}
+            placeholder={apiKey ? "Ask about this move…" : "Add API key from settings to chat"}
+            disabled={chatSending || !apiKey}
+          />
+        </div>
+      </div>
     </div>
   );
 }
