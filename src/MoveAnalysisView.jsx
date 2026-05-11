@@ -280,7 +280,10 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
     setChatHistory([]);
     setChatInput("");
     setChatSending(false);
-    scrollerRef.current?.scrollTo({ top: 0 });
+    // Drill-in lives in the document scroll, not an inner scroller — jump
+    // the page to the top so the board + headline are visible whenever
+    // the move changes (including on initial mount from the overview).
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "auto" });
 
     const moment = momentByMoveIdx[plyIdx];
     if (!moment?.explanation) {
