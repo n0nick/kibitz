@@ -545,7 +545,10 @@ export function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, a
             <ThemePicker value={themeMode} onChange={setTheme} />
           </DrawerField>
 
-          <div style={{ paddingTop: 12, borderTop: `1px solid ${k.hairline}`, marginTop: 8 }}>
+          <div style={{
+            paddingTop: 12, borderTop: `1px solid ${k.hairline}`, marginTop: 8,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+          }}>
             <a
               href="https://github.com/n0nick/kibitz"
               target="_blank"
@@ -561,6 +564,23 @@ export function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, a
             >
               View on GitHub <ExtLinkIcon />
             </a>
+            {typeof __BUILD_SHA__ === "string" && __BUILD_SHA__ !== "dev" && (
+              <a
+                href={`https://github.com/n0nick/kibitz/commit/${__BUILD_SHA__}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Deployed commit"
+                style={{
+                  fontFamily: k.font.mono,
+                  fontSize: 11,
+                  color: k.textDim,
+                  textDecoration: "none",
+                  letterSpacing: 0.3,
+                }}
+              >
+                {__BUILD_SHA__.slice(0, 7)}
+              </a>
+            )}
           </div>
         </Drawer>
         );

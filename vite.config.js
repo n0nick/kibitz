@@ -1,8 +1,27 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
+
+// Resolve a short build hash for the Settings footer. Prefer Vercel's
+// build-time env var; otherwise call git directly; fall back to 'dev' so
+// local watch mode doesn't fail when git isn't reachable.
+function resolveBuildSha() {
+  const fromEnv = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.COMMIT_REF;
+  if (fromEnv) return fromEnv.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'dev';
+  }
+}
+
+const BUILD_SHA = resolveBuildSha();
 
 export default defineConfig({
+  define: {
+    __BUILD_SHA__: JSON.stringify(BUILD_SHA),
+  },
   plugins: [
     react(),
     VitePWA({
