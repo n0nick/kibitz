@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame, reclassifyWithEvals, sanToSquares } from "./parseGame";
-import { analyzeSinglePosition, chatAboutPosition, TONES } from "./analyzeGame";
+import { analyzeSinglePosition, chatAboutPosition, TONES, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
+import { FlagButton } from "./FlagButton";
+import ReportViewer from "./ReportViewer";
 import { fetchLichessAccount, fetchLichessRecentGames } from "./lichess";
 import { analyzePosition, browserEngine, engineLineText } from "./stockfish";
 import { mergeAnalysis, analyzePositions, analyzeWithClaude } from "./pipeline";
@@ -219,6 +221,8 @@ const DEMO_GAME = {
   momentByMoveIdx: Object.fromEntries(DEMO_MOMENTS.map((m) => [m.moveIdx, m])),
   keyMoveIdxs: DEMO_MOMENTS.map((m) => m.moveIdx),
   hasEvals: true,
+  pgn: DEMO_PGN,
+  gameId: "opera-1858",
 };
 
 // ─── SPA-safe click: prevent default only for plain left-clicks so cmd/ctrl/middle still open new tabs
@@ -542,7 +546,7 @@ function RichText({ text, onHover, fenBefore, fenAfter }) {
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
-  const { summary, positions } = useContext(GameContext);
+  const { summary, positions, pgn, gameId: ctxGameId } = useContext(GameContext);
   const fenBefore = positions[moment.moveIdx - 1]?.fen;
   const fenAfter = positions[moment.moveIdx]?.fen;
   const [input, setInput] = useState("");
@@ -574,12 +578,12 @@ function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
         afterLines ? `Current position:\n${engineLineText(afterLines)}` : null,
         beforeLines ? `Before this move (best alternatives):\n${engineLineText(beforeLines)}` : null,
       ].filter(Boolean).join("\n\n") || null;
-      const answer = apiKey
+      const { text: answer, systemPrompt } = apiKey
         ? await chatAboutPosition({ summary, moment, messages: currentMsgs, question: q, tone, fen: fenCurrent, engineLine }, apiKey)
-        : "Add an Anthropic API key on the import screen to enable AI chat.";
+        : { text: "Add an Anthropic API key on the import screen to enable AI chat.", systemPrompt: null };
       setHistory((prev) => ({
         ...prev,
-        [moment.id]: [...(prev[moment.id] || []), { role: "assistant", text: answer }],
+        [moment.id]: [...(prev[moment.id] || []), { role: "assistant", text: answer, systemPrompt }],
       }));
     } catch (e) {
       console.error("Chat failed:", e);
@@ -610,12 +614,27 @@ function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
               key={i}
               className={`px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "text-zinc-300" : "text-zinc-400"}`}
             >
-              <div
-                className={`text-[9px] font-bold uppercase tracking-widest mb-1.5 ${
-                  msg.role === "user" ? "text-zinc-600" : "text-indigo-500"
-                }`}
-              >
-                {msg.role === "user" ? "You" : "Coach"}
+              <div className={`flex items-center gap-2 mb-1.5`}>
+                <div className={`text-[9px] font-bold uppercase tracking-widest flex-1 ${msg.role === "user" ? "text-zinc-600" : "text-indigo-500"}`}>
+                  {msg.role === "user" ? "You" : "Coach"}
+                </div>
+                {msg.role === "assistant" && (
+                  <FlagButton context={{
+                    type: 'chat',
+                    model: DEFAULT_MODEL,
+                    promptVersion: PROMPT_VERSION,
+                    gameId: ctxGameId,
+                    pgn,
+                    promptSentToLlm: msg.systemPrompt,
+                    move: `${moment.moveNumber} ${moment.notation}`,
+                    ply: moment.moveIdx,
+                    classification: moment.classification,
+                    fenBefore,
+                    fenAfter,
+                    commentary: msg.text,
+                    chatHistory: msgs.slice(0, i),
+                  }} />
+                )}
               </div>
               {msg.role === "assistant" ? (
                 <RichText text={msg.text} onHover={onHover} fenBefore={fenBefore} fenAfter={fenAfter} />
@@ -658,7 +677,8 @@ function Chat({ moment, history, setHistory, apiKey, tone, onHover }) {
 // ─── Summary screen ───────────────────────────────────────────────────────────
 
 function SummaryContent({ onClose, onJump }) {
-  const { summary, moments } = useContext(GameContext);
+  const { summary, moments, pgn, gameId, promptSentToLlm } = useContext(GameContext);
+  const flagBaseCtx = { type: 'game-overview', model: DEFAULT_MODEL, promptVersion: PROMPT_VERSION, gameId, pgn, promptSentToLlm };
   return (
     <>
       <div className="flex items-center justify-between px-4 py-4 bg-zinc-900 border-b border-zinc-800 shrink-0">
@@ -719,13 +739,19 @@ function SummaryContent({ onClose, onJump }) {
         )}
         {summary.narrative && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Game narrative</div>
+            <div className="flex items-center gap-2 mb-2.5">
+              <div className="text-[9px] text-zinc-500 uppercase tracking-widest flex-1">Game narrative</div>
+              <FlagButton context={{ ...flagBaseCtx, commentary: summary.narrative }} />
+            </div>
             <p className="text-sm text-zinc-300 leading-[1.75]">{stripAnnotations(summary.narrative)}</p>
           </div>
         )}
         {summary.pattern && (
           <div className="bg-indigo-950/50 border border-indigo-500/20 rounded-2xl p-4">
-            <div className="text-[9px] text-indigo-400 uppercase tracking-widest mb-2.5">Pattern observed</div>
+            <div className="flex items-center gap-2 mb-2.5">
+              <div className="text-[9px] text-indigo-400 uppercase tracking-widest flex-1">Pattern observed</div>
+              <FlagButton context={{ ...flagBaseCtx, commentary: summary.pattern }} />
+            </div>
             <p className="text-sm text-zinc-300 leading-[1.75]">{stripAnnotations(summary.pattern)}</p>
           </div>
         )}
@@ -1205,7 +1231,7 @@ function LoadingScreen() {
 // ─── Game review (inner) ──────────────────────────────────────────────────────
 
 function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analysisStatus, localProgress, startLocalAnalysis }) {
-  const { positions, evals, moments, momentByMoveIdx, keyMoveIdxs, summary } = useContext(GameContext);
+  const { positions, evals, moments, momentByMoveIdx, keyMoveIdxs, summary, pgn, gameId: ctxGameId, promptSentToLlm, momentEngineData } = useContext(GameContext);
 
   const [moveIdx, setMoveIdx] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1224,6 +1250,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
     try { sessionStorage.setItem(chatKey, JSON.stringify(chatHistory)); } catch {}
   }, [chatHistory]);
   const [analysisCache, setAnalysisCache] = useState({});
+  const [analysisCachePrompts, setAnalysisCachePrompts] = useState({});
   const [expandedAlt, setExpandedAlt] = useState(null);
   const [hoverHighlight, setHoverHighlight] = useState(null);
   const [momentLoading, setMomentLoading] = useState({});
@@ -1355,7 +1382,28 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
       </div>
       <div className="px-4 py-4">
         {currentMoment.explanation ? (
-          <p className="text-sm text-zinc-300 leading-[1.75]"><AnnotatedText text={currentMoment.explanation} onHover={setHoverHighlight} fenBefore={positions[currentMoment.moveIdx - 1]?.fen} fenAfter={positions[currentMoment.moveIdx]?.fen} /></p>
+          <div>
+            <p className="text-sm text-zinc-300 leading-[1.75]"><AnnotatedText text={currentMoment.explanation} onHover={setHoverHighlight} fenBefore={positions[currentMoment.moveIdx - 1]?.fen} fenAfter={positions[currentMoment.moveIdx]?.fen} /></p>
+            <div className="mt-2 flex justify-end">
+              <FlagButton context={{
+                type: 'moment',
+                model: DEFAULT_MODEL,
+                promptVersion: PROMPT_VERSION,
+                gameId: ctxGameId,
+                pgn,
+                promptSentToLlm: currentMoment.singleAnalysisPrompt ?? promptSentToLlm,
+                move: `${currentMoment.moveNumber} ${currentMoment.notation}`,
+                ply: currentMoment.moveIdx,
+                classification: currentMoment.classification,
+                evalBefore: evals[currentMoment.moveIdx - 1] ?? 0,
+                evalAfter: evals[currentMoment.moveIdx],
+                fenBefore: positions[currentMoment.moveIdx - 1]?.fen,
+                fenAfter: positions[currentMoment.moveIdx]?.fen,
+                commentary: currentMoment.explanation,
+                engineData: momentEngineData?.[currentMoment.moveIdx],
+              }} />
+            </div>
+          </div>
         ) : momentLoading[currentMoment.id] === "loading" ? (
           <p className="text-sm text-zinc-600 italic animate-pulse">Analyzing…</p>
         ) : momentLoading[currentMoment.id] === "error" ? (
@@ -1369,7 +1417,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
             onClick={async () => {
               setMomentLoading((prev) => ({ ...prev, [currentMoment.id]: "loading" }));
               try {
-                const text = await analyzeSinglePosition({
+                const { text, prompt: singlePrompt } = await analyzeSinglePosition({
                   summary,
                   moveNumber: currentMoment.moveNumber,
                   notation: currentMoment.notation,
@@ -1379,7 +1427,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
                   fen: positions[currentMoment.moveIdx]?.fen,
                   tone,
                 }, apiKey);
-                onPatchMoment(currentMoment.id, text);
+                onPatchMoment(currentMoment.id, text, singlePrompt);
                 setMomentLoading((prev) => ({ ...prev, [currentMoment.id]: "done" }));
               } catch {
                 setMomentLoading((prev) => ({ ...prev, [currentMoment.id]: "error" }));
@@ -1437,9 +1485,28 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
           ) : analysisCache[moveIdx] === "error" ? (
             <p className="text-sm text-red-500/70">Analysis failed. Check your API key.</p>
           ) : analysisCache[moveIdx] ? (
-            <p className="text-sm text-zinc-400 leading-[1.75]">
-              <AnnotatedText text={analysisCache[moveIdx]} onHover={setHoverHighlight} fenBefore={positions[moveIdx - 1]?.fen} fenAfter={currentPos.fen} />
-            </p>
+            <div>
+              <p className="text-sm text-zinc-400 leading-[1.75]">
+                <AnnotatedText text={analysisCache[moveIdx]} onHover={setHoverHighlight} fenBefore={positions[moveIdx - 1]?.fen} fenAfter={currentPos.fen} />
+              </p>
+              <div className="mt-2 flex justify-end">
+                <FlagButton context={{
+                  type: 'moment',
+                  model: DEFAULT_MODEL,
+                  promptVersion: PROMPT_VERSION,
+                  gameId: ctxGameId,
+                  pgn,
+                  promptSentToLlm: analysisCachePrompts[moveIdx] ?? promptSentToLlm,
+                  move: `${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? '.' : '...'} ${currentPos.san}`,
+                  ply: moveIdx,
+                  evalBefore: evals[moveIdx - 1] ?? 0,
+                  evalAfter: evals[moveIdx],
+                  fenBefore: positions[moveIdx - 1]?.fen,
+                  fenAfter: currentPos.fen,
+                  commentary: analysisCache[moveIdx],
+                }} />
+              </div>
+            </div>
           ) : (
             <button
               onClick={async () => {
@@ -1447,7 +1514,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
                 setAnalysisCache((prev) => ({ ...prev, [moveIdx]: "loading" }));
                 try {
                   const mn = `${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? "." : "..."}`;
-                  const text = await analyzeSinglePosition({
+                  const { text, prompt: singlePrompt } = await analyzeSinglePosition({
                     summary,
                     moveNumber: mn,
                     notation: currentPos.san,
@@ -1458,6 +1525,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
                     tone,
                   }, apiKey);
                   setAnalysisCache((prev) => ({ ...prev, [moveIdx]: text }));
+                  setAnalysisCachePrompts((prev) => ({ ...prev, [moveIdx]: singlePrompt }));
                 } catch {
                   setAnalysisCache((prev) => ({ ...prev, [moveIdx]: "error" }));
                 }
@@ -1672,7 +1740,7 @@ export default function App() {
           localAbortRef.current?.abort();
           setLocalProgress(null);
           localStorage.removeItem(`kibitz-evals-${gameId}`);
-          setGameData(parsed);
+          setGameData({ ...parsed, pgn, gameId });
           if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, gameId);
           else setAnalysisStatus(null);
         }
@@ -1693,7 +1761,7 @@ export default function App() {
         const { data, ts } = JSON.parse(raw);
         if (Date.now() - ts < CACHE_TTL) {
           const reclassified = reclassifyWithEvals(gameData, data);
-          setGameData(reclassified);
+          setGameData(prev => ({ ...reclassified, pgn: prev?.pgn, gameId: prev?.gameId }));
           setLocalProgress(null);
           if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId);
           else setAnalysisStatus(null);
@@ -1710,7 +1778,7 @@ export default function App() {
     if (!reclassified) return;
 
     localStorage.setItem(evalsKey, JSON.stringify({ data: reclassified.evals, ts: Date.now() }));
-    setGameData(reclassified);
+    setGameData(prev => ({ ...reclassified, pgn: prev?.pgn, gameId: prev?.gameId }));
     setLocalProgress(null);
     if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId);
     else setAnalysisStatus(null);
@@ -1731,14 +1799,15 @@ export default function App() {
       }
       const parsed = parseGame(pgn);
       addToHistory({ id, source: "lichess", white: parsed.summary.white, black: parsed.summary.black, result: parsed.summary.result });
+      const gameWithMeta = { ...parsed, pgn, gameId: id };
       if (!parsed.hasEvals) {
-        setGameData(parsed);
+        setGameData(gameWithMeta);
         setGameId(id);
         setScreen("review");
         setAnalysisStatus("awaiting-evals");
         return;
       }
-      setGameData(parsed);
+      setGameData(gameWithMeta);
       setGameId(id);
       setScreen("review");
       if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force);
@@ -1756,7 +1825,7 @@ export default function App() {
       const id = pgnGameId(pgn);
       setCachedPgn(id, pgn);
       addToHistory({ id, source: "pgn", white: parsed.summary.white, black: parsed.summary.black, result: parsed.summary.result });
-      setGameData(parsed);
+      setGameData({ ...parsed, pgn, gameId: id });
       setGameId(id);
       setScreen("review");
       if (!parsed.hasEvals) {
@@ -1771,14 +1840,14 @@ export default function App() {
   };
 
   const runAnalysis = async (game, pgn, key, t, id, force = false) => {
-    const cacheKey = `kibitz-analysis-${id}-${t}`;
+    const cacheKey = `kibitz-analysis-${id}-${t}-${DEFAULT_MODEL}-${PROMPT_VERSION}`;
     if (!force) {
       try {
         const raw = localStorage.getItem(cacheKey);
         if (raw) {
-          const { data, ts } = JSON.parse(raw);
+          const { data, prompt: cachedPrompt, ts } = JSON.parse(raw);
           if (Date.now() - ts < CACHE_TTL) {
-            setGameData((prev) => mergeAnalysis(prev, data));
+            setGameData((prev) => ({ ...mergeAnalysis(prev, data), promptSentToLlm: cachedPrompt ?? null }));
             setAnalysisStatus("done");
             return;
           }
@@ -1790,9 +1859,9 @@ export default function App() {
     }
     setAnalysisStatus("loading");
     try {
-      const { result } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t, engine: browserEngine });
-      localStorage.setItem(cacheKey, JSON.stringify({ data: result, ts: Date.now() }));
-      setGameData((prev) => prev ? mergeAnalysis(prev, result) : prev);
+      const { result, prompt, momentEngineData } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t, engine: browserEngine });
+      localStorage.setItem(cacheKey, JSON.stringify({ data: result, prompt, ts: Date.now() }));
+      setGameData((prev) => prev ? { ...mergeAnalysis(prev, result), promptSentToLlm: prompt, momentEngineData } : prev);
       setAnalysisStatus("done");
     } catch (e) {
       console.error("Analysis failed:", e);
@@ -1800,9 +1869,9 @@ export default function App() {
     }
   };
 
-  const patchMomentExplanation = (momentId, explanation) => {
+  const patchMomentExplanation = (momentId, explanation, singleAnalysisPrompt = null) => {
     setGameData((prev) => {
-      const moments = prev.moments.map((m) => m.id === momentId ? { ...m, explanation } : m);
+      const moments = prev.moments.map((m) => m.id === momentId ? { ...m, explanation, ...(singleAnalysisPrompt ? { singleAnalysisPrompt } : {}) } : m);
       return { ...prev, moments, momentByMoveIdx: Object.fromEntries(moments.map((m) => [m.moveIdx, m])) };
     });
   };
@@ -1815,6 +1884,7 @@ export default function App() {
     history.replaceState(null, "", window.location.pathname);
   };
 
+  if (window.location.pathname === '/report') return <ReportViewer />;
   if (screen === "loading") return <LoadingScreen />;
   if (screen === "review" && gameData) {
     return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} tone={tone} onPatchMoment={patchMomentExplanation} analysisStatus={analysisStatus} localProgress={localProgress} startLocalAnalysis={startLocalAnalysis} />;

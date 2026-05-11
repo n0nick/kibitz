@@ -47,3 +47,5 @@ benchmark/results/
 
 # Claude Code
 .claude/worktrees/
+.vercel
+.env*.local

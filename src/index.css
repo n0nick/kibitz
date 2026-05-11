@@ -22,3 +22,16 @@ body {
   color: #f4f4f5;
   -webkit-font-smoothing: antialiased;
 }
+
+.report-body h2 { font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: #f4f4f5; }
+.report-body h3 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.4rem; color: #d4d4d8; }
+.report-body p  { margin: 0.4rem 0; }
+.report-body strong { color: #f4f4f5; }
+.report-body a  { color: #60a5fa; text-decoration: underline; }
+.report-body blockquote { border-left: 3px solid #3f3f46; padding-left: 0.75rem; color: #a1a1aa; margin: 0.5rem 0; }
+.report-body pre { background: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 0.5rem 0; }
+.report-body code { font-family: ui-monospace, monospace; font-size: 0.8rem; }
+.report-body ul { list-style: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
+.report-body li { margin: 0.2rem 0; }
+.report-body details { margin: 0.5rem 0; }
+.report-body summary { cursor: pointer; color: #a1a1aa; }

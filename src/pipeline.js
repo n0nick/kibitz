@@ -1,5 +1,5 @@
 import { parseGame, reclassifyWithEvals } from './parseGame.js';
-import { analyzeGame, buildPrompt, selectMoments, scrubExplanation } from './analyzeGame.js';
+import { analyzeGameWithUsage, buildPrompt, selectMoments, scrubExplanation } from './analyzeGame.js';
 
 // Merging Claude commentary into parsed game state.
 // Exported so App.jsx and the benchmark share the same logic.
@@ -101,9 +101,9 @@ export async function analyzeWithClaude(game, pgn, { apiKey, tone = 'beginner', 
       buildPrompt(pgn, moments, summary, evals, tone, { momentEngineData });
   }
 
-  const result = await analyzeGame(effectivePgn, game.moments, game.summary, game.evals, key, tone, model, effectivePromptBuilder);
+  const { result, prompt } = await analyzeGameWithUsage(effectivePgn, game.moments, game.summary, game.evals, key, tone, model, effectivePromptBuilder);
   if (momentEngineData) scrubResultExplanations(result, momentEngineData);
-  return { result, merged: mergeAnalysis(game, result) };
+  return { result, merged: mergeAnalysis(game, result), prompt, momentEngineData };
 }
 
 function reconstructPgn(game) {

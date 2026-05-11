@@ -15,7 +15,10 @@
     "bench": "node benchmark/runner.js && node benchmark/aggregate.js --run $(ls -dt benchmark/results/*/ | head -1)"
   },
   "dependencies": {
+    "@vercel/blob": "^2.3.3",
     "chess.js": "^1.4.0",
+    "lucide-react": "^1.14.0",
+    "marked": "^18.0.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "stockfish": "^18.0.7"

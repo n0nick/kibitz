@@ -2,6 +2,7 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+export const PROMPT_VERSION = "v1.2";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -265,7 +266,7 @@ export async function analyzeGameWithUsage(pgn, moments, summary, evals, apiKey,
   );
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("No JSON in API response");
-  return { result: JSON.parse(repairJson(match[0])), usage };
+  return { result: JSON.parse(repairJson(match[0])), usage, prompt };
 }
 
 export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone }, apiKey) {
@@ -283,7 +284,7 @@ ${ANNOTATION_RULES}
 Reply with plain text only (no JSON).`;
 
   const { text } = await callApi([{ role: "user", content: prompt }], apiKey);
-  return text;
+  return { text, prompt };
 }
 
 export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine }, apiKey) {
@@ -299,5 +300,5 @@ IMPORTANT: Only claim a move gives check or captures a piece if it genuinely doe
   ];
 
   const { text } = await callApi(apiMessages, apiKey, { system, maxTokens: 512 });
-  return text;
+  return { text, systemPrompt: system };
 }
