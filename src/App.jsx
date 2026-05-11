@@ -1168,18 +1168,49 @@ function DrawerInputRow({ type, value, onChange, onBlur, onEnter, placeholder, m
 // ─── Loading screen ───────────────────────────────────────────────────────────
 
 // Loading screen — matches design 03 · Analyzing: editorial heading,
-// breathing sparkline (a sine wave that pulses while we wait), and a step list.
-function LoadingScreen() {
+// breathing sparkline (a sine wave that pulses while we wait), and a phase-aware
+// step list. Stays mounted from PGN fetch through LLM narrative drafting.
+//
+// Phases (in order):
+//   "fetch"          → fetching PGN from Lichess / cache
+//   "awaiting-evals" → need engine analysis (user clicks "Analyze locally")
+//   "engine"         → local Stockfish pass running
+//   "llm"            → LLM drafting narrative
+function LoadingScreen({ phase = "fetch", summary, localProgress, startLocalAnalysis, onCancel }) {
+  const order = ["fetch", "engine", "llm"];
+  const phaseIdx = phase === "awaiting-evals" ? 1 : Math.max(0, order.indexOf(phase));
+
   const steps = [
-    { label: "Fetching PGN",         active: true,  detail: "From Lichess or PGN cache" },
-    { label: "Parsing moves",        active: false, detail: "Building positions" },
-    { label: "Mapping turning points", active: false, detail: "Classifying each ply" },
-    { label: "Drafting narrative",   active: false, detail: "Coaching voice" },
+    {
+      key: "fetch",
+      label: "Fetching the game",
+      detail: "From Lichess or PGN cache",
+    },
+    {
+      key: "engine",
+      label: phase === "awaiting-evals" ? "Awaiting engine analysis" : "Running engine pass",
+      detail: phase === "awaiting-evals"
+        ? "No Lichess evals — run a quick local analysis"
+        : localProgress
+        ? `Stockfish · ply ${localProgress.current} / ${localProgress.total}`
+        : "Stockfish · classifying each ply",
+    },
+    {
+      key: "llm",
+      label: "Drafting narrative",
+      detail: "Coaching voice",
+    },
   ];
+
   // Pre-built gentle wave so the sparkline has shape while we wait.
   const wave = Array.from({ length: 24 }, (_, i) =>
     Math.sin(i / 2.4) * 0.8 + Math.sin(i / 4.5) * 0.4
   );
+
+  const oppName = summary && (summary.black && summary.white)
+    ? `${summary.white} vs ${summary.black}`
+    : null;
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -1188,8 +1219,19 @@ function LoadingScreen() {
       paddingBottom: 64, position: "relative",
     }}>
       <NavBar
-        left={<span style={{ color: k.textMute, fontSize: 20 }}>‹</span>}
+        left={
+          onCancel ? (
+            <button
+              onClick={onCancel}
+              aria-label="Cancel"
+              style={{ background: "transparent", border: "none", color: k.textMute, fontSize: 20, lineHeight: 1, cursor: "pointer", padding: 4 }}
+            >
+              ‹
+            </button>
+          ) : <span style={{ color: k.textMute, fontSize: 20 }}>‹</span>
+        }
         title="Analyzing"
+        subtitle={oppName}
       />
 
       <div style={{ maxWidth: 540, margin: "0 auto" }}>
@@ -1212,34 +1254,69 @@ function LoadingScreen() {
 
         <div style={{ padding: "10px 18px" }}>
           <Card pad={4}>
-            {steps.map((s, i) => (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "12px 14px",
-                borderBottom: i < steps.length - 1 ? `1px solid ${k.hairline}` : "none",
-              }}>
-                <div style={{
-                  width: 18, height: 18, borderRadius: 9,
-                  border: `1.5px solid ${s.active ? k.accent : k.hairline}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
+            {steps.map((s, i) => {
+              const done = i < phaseIdx;
+              const active = i === phaseIdx;
+              return (
+                <div key={s.key} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "12px 14px",
+                  borderBottom: i < steps.length - 1 ? `1px solid ${k.hairline}` : "none",
                 }}>
-                  {s.active && (
-                    <span style={{
-                      width: 8, height: 8, borderRadius: 4, background: k.accent,
-                      animation: "kbz-pulse 1.2s ease-in-out infinite",
-                    }} />
-                  )}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, fontSize: 14, color: s.active ? k.text : k.textMute }}>
-                    {s.label}
+                  <div style={{
+                    width: 18, height: 18, borderRadius: 9,
+                    border: `1.5px solid ${done || active ? k.accent : k.hairline}`,
+                    background: done ? k.accent : "transparent",
+                    color: k.surface,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 700,
+                    flexShrink: 0,
+                  }}>
+                    {done ? "✓" : active ? (
+                      <span style={{
+                        width: 8, height: 8, borderRadius: 4, background: k.accent,
+                        animation: "kbz-pulse 1.2s ease-in-out infinite",
+                      }} />
+                    ) : null}
                   </div>
-                  <div style={{ fontSize: 11, color: k.textDim, marginTop: 2 }}>{s.detail}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500, fontSize: 14, color: done || active ? k.text : k.textMute }}>
+                      {s.label}
+                    </div>
+                    <div style={{ fontSize: 11, color: k.textDim, marginTop: 2 }}>{s.detail}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </Card>
+
+          {/* Awaiting-evals CTA */}
+          {phase === "awaiting-evals" && startLocalAnalysis && (
+            <button
+              onClick={startLocalAnalysis}
+              style={{
+                width: "100%", marginTop: 14,
+                padding: "12px 16px", borderRadius: 12,
+                background: k.accent, color: k.surface,
+                fontSize: 14, fontWeight: 600,
+                border: "none", cursor: "pointer",
+                fontFamily: k.font.sans,
+              }}
+            >
+              Analyze locally (~1 min)
+            </button>
+          )}
+
+          {/* Engine progress bar */}
+          {phase === "engine" && localProgress && (
+            <div style={{ marginTop: 14, height: 4, background: k.surface2, borderRadius: 2, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", background: k.accent,
+                transition: "width 300ms",
+                width: `${(localProgress.current / Math.max(1, localProgress.total)) * 100}%`,
+              }} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1530,7 +1607,37 @@ export default function App() {
   };
 
   if (window.location.pathname === '/report') return <ReportViewer />;
-  if (screen === "loading") return <LoadingScreen />;
+
+  // Keep the editorial loading state up through the engine + LLM phases,
+  // so the user lands directly on a fully-populated overview when ready.
+  // Cuts to the overview if analysis is already done (cached) or simply
+  // not running (no API key, or already errored — we still want to show
+  // whatever structural data we have).
+  const showLoading =
+    screen === "loading" ||
+    (screen === "overview" && (
+      analysisStatus === "loading" ||
+      (analysisStatus === "awaiting-evals" && !localProgress) ||
+      (localProgress && localProgress.current < localProgress.total)
+    ));
+  if (showLoading) {
+    const phase = screen === "loading"
+      ? "fetch"
+      : analysisStatus === "awaiting-evals"
+      ? "awaiting-evals"
+      : localProgress
+      ? "engine"
+      : "llm";
+    return (
+      <LoadingScreen
+        phase={phase}
+        summary={gameData?.summary}
+        localProgress={localProgress}
+        startLocalAnalysis={phase === "awaiting-evals" ? startLocalAnalysis : null}
+        onCancel={handleReset}
+      />
+    );
+  }
 
   if (screen === "overview" && gameData) {
     return (

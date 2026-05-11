@@ -168,7 +168,7 @@ function PatternCard({ pattern }) {
 
 // ─── Turning-point row — used inline below the CTA ──────────────────────────
 
-function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClick }) {
+function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClick, awaitingLlm }) {
   if (!position) return null;
   const teaser = moment.card_teaser ?? stripAnnotations(moment.explanation ?? "");
   const swingColor = moment.classification === "blunder"
@@ -198,11 +198,16 @@ function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClic
           <div style={{ marginBottom: 8 }}>
             <Classification kind={moment.classification} size={11} />
           </div>
-          {teaser && (
+          {teaser ? (
             <div style={{ fontSize: 13, color: k.text, lineHeight: 1.4, fontWeight: 500 }}>
               {teaser}
             </div>
-          )}
+          ) : awaitingLlm ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ height: 11, background: k.surface2, borderRadius: 4, width: "92%", animation: "kbz-pulse 1.4s ease-in-out infinite" }} />
+              <div style={{ height: 11, background: k.surface2, borderRadius: 4, width: "62%", animation: "kbz-pulse 1.4s ease-in-out infinite" }} />
+            </div>
+          ) : null}
         </div>
       </div>
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${k.hairline}`, display: "flex", alignItems: "center", gap: 10 }}>
@@ -400,15 +405,31 @@ export function GameOverview({
         </div>
 
         {/* Pattern observation */}
-        {summary.pattern && (
+        {(summary.pattern || loading) && (
           <div style={{ padding: "18px 16px 0" }}>
             <Section label="Patterns I noticed" style={{ marginBottom: 6 }} />
-            <PatternCard pattern={{
-              glyph: "↺",
-              title: undefined,
-              body: stripAnnotations(summary.pattern),
-              tag: "Principle",
-            }} />
+            {summary.pattern ? (
+              <PatternCard pattern={{
+                glyph: "↺",
+                title: undefined,
+                body: stripAnnotations(summary.pattern),
+                tag: "Principle",
+              }} />
+            ) : (
+              <Card pad={14}>
+                <div style={{ display: "flex", gap: 12 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8,
+                    background: k.surface2, flexShrink: 0,
+                  }} />
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ height: 14, background: k.surface2, borderRadius: 4, width: "90%", animation: "kbz-pulse 1.4s ease-in-out infinite" }} />
+                    <div style={{ height: 14, background: k.surface2, borderRadius: 4, width: "70%", animation: "kbz-pulse 1.4s ease-in-out infinite" }} />
+                    <div style={{ height: 10, background: k.surface2, borderRadius: 4, width: 60, marginTop: 4, animation: "kbz-pulse 1.4s ease-in-out infinite" }} />
+                  </div>
+                </div>
+              </Card>
+            )}
           </div>
         )}
 
