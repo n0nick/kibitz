@@ -627,9 +627,9 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
                     key={g.id}
                     href={`?game=${g.id}`}
                     onClick={loading ? undefined : spaClick(() => { setError(null); handleListLoad(g.id); })}
-                    style={{ textDecoration: "none", color: "inherit", display: "block", opacity: loading && !isLoading ? 0.5 : 1, pointerEvents: loading ? "none" : "auto" }}
+                    style={{ textDecoration: "none", color: "inherit", display: "block", cursor: "pointer", opacity: loading && !isLoading ? 0.5 : 1, pointerEvents: loading ? "none" : "auto" }}
                   >
-                    <Card pad={14} lift={isLoading} style={{ position: "relative" }}>
+                    <Card pad={14} lift={isLoading} style={{ position: "relative", cursor: "pointer" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                         <OpponentDot result={userResult ?? "D"} />
                         <span style={{ fontWeight: 600, fontSize: 15 }}>vs {opp ?? "Unknown"}</span>
@@ -709,9 +709,9 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
                         handleListLoad(h.id);
                       }
                     })}
-                    style={{ textDecoration: "none", color: "inherit", display: "block", opacity: loading && !isLoading ? 0.5 : 1, pointerEvents: loading ? "none" : "auto" }}
+                    style={{ textDecoration: "none", color: "inherit", display: "block", cursor: "pointer", opacity: loading && !isLoading ? 0.5 : 1, pointerEvents: loading ? "none" : "auto" }}
                   >
-                    <Card pad={12}>
+                    <Card pad={12} style={{ cursor: "pointer" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 3, background: h.source === "lichess" ? k.accent : k.warn }} />
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14, fontWeight: 500 }}>
@@ -776,35 +776,165 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
         </Drawer>
       )}
 
-      {/* ─── Add-game drawer ────────────────────────────────────────────── */}
+      {/* ─── Add-game full-screen page (screen 02) ──────────────────────── */}
       {drawer === "add" && (
-        <Drawer onClose={() => setDrawer(null)} title="Add a game" subtitle="Paste a Lichess URL or a PGN">
-          <div style={{ marginBottom: 14 }}>
-            <textarea
-              value={url}
-              onChange={(e) => { setUrl(e.target.value); setError(null); }}
-              placeholder="https://lichess.org/… or paste a PGN"
-              rows={url.includes("\n") || url.length > 60 ? 6 : 1}
-              style={{
-                width: "100%",
-                background: k.surface,
-                border: `1px solid ${k.hairline}`,
-                borderRadius: 12,
-                padding: "12px 14px",
-                color: k.text,
-                fontSize: 14,
-                fontFamily: isPgn ? k.font.mono : k.font.sans,
-                outline: "none",
-                resize: "vertical",
-                minHeight: 44,
-              }}
-            />
-            {isPgn && (
-              <div style={{ fontSize: 11, color: k.accent, marginTop: 6, letterSpacing: 0.6, textTransform: "uppercase", fontWeight: 600 }}>PGN detected</div>
-            )}
-          </div>
+        <AddGameScreen
+          onClose={() => { setDrawer(null); setError(null); }}
+          onOpenSettings={() => setDrawer("settings")}
+          onSubmit={handleUrlLoad}
+          url={url}
+          setUrl={(v) => { setUrl(v); setError(null); }}
+          isPgn={isPgn}
+          canLoad={canLoad}
+          loading={loading}
+          forceReanalyze={forceReanalyze}
+          setForceReanalyze={setForceReanalyze}
+          lichessUser={lichessUser}
+          onDemo={() => { setDrawer(null); onDemo(); }}
+        />
+      )}
+    </div>
+  );
+}
 
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: k.textMute, marginBottom: 14, cursor: "pointer", userSelect: "none" }}>
+// ─── Add-game screen (full-screen, matches design 02 · First run) ────────────
+
+function AddGameScreen({ onClose, onOpenSettings, onSubmit, url, setUrl, isPgn, canLoad, loading, forceReanalyze, setForceReanalyze, lichessUser, onDemo }) {
+  const [pgnExpanded, setPgnExpanded] = useState(isPgn || url.length > 0);
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 50,
+        background: k.bg, color: k.text,
+        fontFamily: k.font.sans,
+        overflowY: "auto",
+      }}
+    >
+      <NavBar
+        left={
+          <button
+            onClick={onClose}
+            aria-label="Back"
+            style={{ background: "transparent", border: "none", color: k.textMute, fontSize: 20, lineHeight: 1, cursor: "pointer", padding: 4 }}
+          >
+            ‹
+          </button>
+        }
+        title="Add a game"
+      />
+
+      <div style={{ maxWidth: 540, margin: "0 auto", padding: "0 22px 32px" }}>
+        {/* Decorative tiny endgame board */}
+        <div style={{ display: "flex", justifyContent: "center", margin: "20px 0 28px" }}>
+          <div style={{ width: 96 }}>
+            <TinyEndgameBoard />
+          </div>
+        </div>
+
+        {/* Editorial heading + sub */}
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <Editorial size={28} style={{ marginBottom: 12 }}>
+            Hand me a game.<br />
+            I'll find the moment it turned.
+          </Editorial>
+          <div style={{ fontSize: 14, color: k.textMute, lineHeight: 1.5 }}>
+            Kibitz reads your games like a coach,<br />
+            not an engine printout.
+          </div>
+        </div>
+
+        {/* Source cards */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Lichess */}
+          {lichessUser ? (
+            <Card pad={14} onClick={onClose}>
+              <SourceRow
+                glyph="♞"
+                glyphColor={k.accent}
+                title="Lichess"
+                sub={`Connected as ${lichessUser} — see your recent games`}
+              />
+            </Card>
+          ) : (
+            <Card pad={14} onClick={onOpenSettings}>
+              <SourceRow
+                glyph="♞"
+                glyphColor={k.accent}
+                title="Lichess"
+                sub="Connect your account to pull recent games"
+              />
+            </Card>
+          )}
+
+          {/* URL */}
+          <Card pad={14}>
+            <SourceRow
+              glyph="↗"
+              glyphColor="#9CC9F5"
+              title="From a URL"
+              sub="Paste a lichess.org/<id> link"
+            />
+            <div style={{ marginTop: 10 }}>
+              <input
+                type="text"
+                value={isPgn ? "" : url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://lichess.org/…"
+                style={{
+                  width: "100%",
+                  background: k.surface2,
+                  border: `1px solid ${k.hairline}`,
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  color: k.text,
+                  fontFamily: k.font.sans,
+                  fontSize: 14,
+                  outline: "none",
+                }}
+              />
+            </div>
+          </Card>
+
+          {/* PGN */}
+          <Card pad={14}>
+            <div onClick={() => setPgnExpanded((v) => !v)} style={{ cursor: "pointer" }}>
+              <SourceRow
+                glyph="❑"
+                glyphColor={k.textMute}
+                title="Paste PGN"
+                sub={pgnExpanded ? "Paste raw PGN below" : "Or drop a .pgn file"}
+                trail={pgnExpanded ? "▲" : "▼"}
+              />
+            </div>
+            {pgnExpanded && (
+              <div style={{ marginTop: 10 }}>
+                <textarea
+                  value={isPgn ? url : ""}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder={'[Event "..."]\n[White "..."]\n[Black "..."]\n…\n1. e4 e5 2. Nf3 …'}
+                  rows={6}
+                  style={{
+                    width: "100%",
+                    background: k.surface2,
+                    border: `1px solid ${k.hairline}`,
+                    borderRadius: 10,
+                    padding: "10px 12px",
+                    color: k.text,
+                    fontFamily: k.font.mono,
+                    fontSize: 13,
+                    outline: "none",
+                    resize: "vertical",
+                    minHeight: 96,
+                  }}
+                />
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Re-analyze + Open button */}
+        <div style={{ marginTop: 18 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: k.textMute, marginBottom: 12, cursor: "pointer", userSelect: "none" }}>
             <input
               type="checkbox"
               checked={forceReanalyze}
@@ -813,48 +943,122 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
             />
             Re-analyze (overwrite saved)
           </label>
-
           <button
-            onClick={handleUrlLoad}
+            onClick={onSubmit}
             disabled={loading || !canLoad}
             style={{
               width: "100%",
-              padding: "12px 16px",
+              padding: "14px 16px",
               borderRadius: 12,
               background: canLoad ? k.accent : k.surface2,
-              color: canLoad ? k.bg : k.textDim,
+              color: canLoad ? k.surface : k.textDim,
               fontSize: 14,
               fontWeight: 600,
               border: "none",
               cursor: canLoad && !loading ? "pointer" : "default",
               transition: "opacity 0.15s",
-              opacity: loading ? 0.5 : 1,
+              opacity: loading ? 0.6 : 1,
             }}
           >
             {loading ? "Loading…" : "Open game →"}
           </button>
+        </div>
 
-          <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${k.hairline}` }}>
-            <button
-              onClick={() => { setDrawer(null); onDemo(); }}
-              style={{
-                width: "100%", textAlign: "left",
-                background: k.surface2, color: k.text, border: "none",
-                borderRadius: 12, padding: 12,
-                fontFamily: k.font.sans, fontSize: 14, fontWeight: 500,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
-              }}
-            >
-              <span style={{ width: 32, height: 32, borderRadius: 8, background: k.accentDim, color: k.accent, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>♞</span>
-              <span style={{ flex: 1 }}>
-                <span style={{ display: "block" }}>Try the Opera Game</span>
-                <span style={{ display: "block", fontSize: 11, color: k.textMute, fontWeight: 400, marginTop: 2 }}>Morphy vs Duke Karl, 1858 · no signup</span>
-              </span>
-              <span style={{ color: k.textDim }}>›</span>
-            </button>
-          </div>
-        </Drawer>
-      )}
+        {/* "or" divider */}
+        <div style={{ display: "flex", alignItems: "center", padding: "22px 0 14px", gap: 12 }}>
+          <span style={{ flex: 1, height: 1, background: k.hairline }} />
+          <span style={{ fontSize: 10, color: k.textDim, textTransform: "uppercase", letterSpacing: 0.9, fontWeight: 600 }}>or</span>
+          <span style={{ flex: 1, height: 1, background: k.hairline }} />
+        </div>
+
+        {/* Sample game */}
+        <Card pad={14} onClick={onDemo}>
+          <SourceRow
+            glyph="♟"
+            glyphColor={k.textMute}
+            title="Try a sample game"
+            sub="Morphy vs Duke Karl, 1858 · no signup"
+            trail="›"
+          />
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// Small atom — source-option row used inside AddGameScreen cards.
+function SourceRow({ glyph, glyphColor, title, sub, trail }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div
+        style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: `${glyphColor}22`,
+          color: glyphColor,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 22, flexShrink: 0,
+        }}
+      >
+        {glyph}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 15 }}>{title}</div>
+        <div style={{ fontSize: 12, color: k.textMute, marginTop: 2 }}>{sub}</div>
+      </div>
+      {trail && <span style={{ color: k.textDim, fontSize: 18 }}>{trail}</span>}
+    </div>
+  );
+}
+
+// Decorative 120px K-vs-k endgame board used on the Add-a-game screen.
+function TinyEndgameBoard() {
+  const palette = k.board;
+  // 2k5 / 8 / 8 / 8 / 8 / 5K2 / 8 / 8 — black king on c6, white king on f3
+  const rows = ["8","8","2k5","8","8","5K2","8","8"];
+  const parsed = rows.map((row) => {
+    const out = [];
+    for (const ch of row) {
+      const n = parseInt(ch, 10);
+      if (!isNaN(n)) for (let i = 0; i < n; i++) out.push(null);
+      else out.push(ch);
+    }
+    return out;
+  });
+  return (
+    <div
+      style={{
+        background: "#E9E4D7",
+        borderRadius: 14,
+        padding: 4,
+        boxShadow: "0 1px 0 rgba(255,255,255,0.8) inset, 0 6px 22px rgba(60,40,20,0.10)",
+      }}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", borderRadius: 6, overflow: "hidden" }}>
+        {parsed.map((row, ri) =>
+          row.map((p, fi) => {
+            const light = (ri + fi) % 2 === 0;
+            return (
+              <div
+                key={`${ri}-${fi}`}
+                style={{
+                  position: "relative",
+                  aspectRatio: "1 / 1",
+                  background: light ? palette.light : palette.dark,
+                }}
+              >
+                {p && (
+                  <img
+                    src={p === "K" ? "/pieces/white-king.svg" : "/pieces/black-king.svg"}
+                    alt={p}
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", padding: "8%", pointerEvents: "none" }}
+                    draggable={false}
+                  />
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -963,16 +1167,87 @@ function DrawerInputRow({ type, value, onChange, onBlur, onEnter, placeholder, m
 
 // ─── Loading screen ───────────────────────────────────────────────────────────
 
+// Loading screen — matches design 03 · Analyzing: editorial heading,
+// breathing sparkline (a sine wave that pulses while we wait), and a step list.
 function LoadingScreen() {
+  const steps = [
+    { label: "Fetching PGN",         active: true,  detail: "From Lichess or PGN cache" },
+    { label: "Parsing moves",        active: false, detail: "Building positions" },
+    { label: "Mapping turning points", active: false, detail: "Classifying each ply" },
+    { label: "Drafting narrative",   active: false, detail: "Coaching voice" },
+  ];
+  // Pre-built gentle wave so the sparkline has shape while we wait.
+  const wave = Array.from({ length: 24 }, (_, i) =>
+    Math.sin(i / 2.4) * 0.8 + Math.sin(i / 4.5) * 0.4
+  );
   return (
     <div style={{
-      minHeight: "100vh", background: k.bg, color: k.text,
-      display: "flex", alignItems: "center", justifyContent: "center",
+      minHeight: "100vh",
+      background: k.bg, color: k.text,
       fontFamily: k.font.sans,
+      paddingBottom: 64, position: "relative",
     }}>
-      <div style={{ textAlign: "center" }}>
-        <div className="kbz-editorial" style={{ fontSize: 22, marginBottom: 6 }}>Loading game…</div>
-        <div style={{ fontSize: 12, color: k.textMute }}>Fetching PGN and engine evals.</div>
+      <NavBar
+        left={<span style={{ color: k.textMute, fontSize: 20 }}>‹</span>}
+        title="Analyzing"
+      />
+
+      <div style={{ maxWidth: 540, margin: "0 auto" }}>
+        <div style={{ padding: "20px 22px 0", textAlign: "center" }}>
+          <div className="kbz-caps" style={{ marginBottom: 8 }}>Reading your game</div>
+          <Editorial size={26} style={{ marginBottom: 4 }}>
+            Looking for the moment<br />it turned…
+          </Editorial>
+        </div>
+
+        {/* Breathing sparkline — gentle pulse on opacity */}
+        <div style={{
+          padding: "30px 22px 12px",
+          display: "flex",
+          justifyContent: "center",
+          animation: "kbz-pulse 2.4s ease-in-out infinite",
+        }}>
+          <Sparkline data={wave} markIdx={-1} w={340} h={88} showAxis={false} />
+        </div>
+
+        <div style={{ padding: "10px 18px" }}>
+          <Card pad={4}>
+            {steps.map((s, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "12px 14px",
+                borderBottom: i < steps.length - 1 ? `1px solid ${k.hairline}` : "none",
+              }}>
+                <div style={{
+                  width: 18, height: 18, borderRadius: 9,
+                  border: `1.5px solid ${s.active ? k.accent : k.hairline}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  {s.active && (
+                    <span style={{
+                      width: 8, height: 8, borderRadius: 4, background: k.accent,
+                      animation: "kbz-pulse 1.2s ease-in-out infinite",
+                    }} />
+                  )}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, fontSize: 14, color: s.active ? k.text : k.textMute }}>
+                    {s.label}
+                  </div>
+                  <div style={{ fontSize: 11, color: k.textDim, marginTop: 2 }}>{s.detail}</div>
+                </div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      </div>
+
+      <div style={{
+        position: "absolute", bottom: 28, left: 0, right: 0,
+        textAlign: "center", fontSize: 12, color: k.textDim, padding: "0 40px",
+      }}>
+        Most games take about 15 seconds.
       </div>
     </div>
   );

@@ -6,7 +6,7 @@
 
 import { kbzTokens, CLASS_DEF, sparklinePath } from "./design.js";
 
-export const tokens = kbzTokens("dark");
+export const tokens = kbzTokens("light");
 export { CLASS_DEF };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -21,12 +21,16 @@ export function Card({ children, style, pad = 16, onClick, lift = false, accent 
         background: accent ? k.accentDim : k.surface,
         borderRadius: 14,
         boxShadow: lift
-          ? "0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.25)"
-          : "0 1px 0 rgba(255,255,255,0.03) inset",
+          ? (k.isDark
+            ? "0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.25)"
+            : "0 1px 0 rgba(255,255,255,0.9) inset, 0 4px 16px rgba(60,40,20,0.06)")
+          : (k.isDark
+            ? "0 1px 0 rgba(255,255,255,0.03) inset"
+            : "0 1px 0 rgba(255,255,255,0.7) inset, 0 1px 2px rgba(60,40,20,0.04)"),
         padding: pad,
         fontFamily: k.font.sans,
         color: k.text,
-        cursor: onClick ? "pointer" : "default",
+        cursor: onClick ? "pointer" : undefined,
         ...style,
       }}
     >
@@ -478,7 +482,7 @@ export function ThemedBoard({
                   <div style={{ position: "absolute", inset: 0, background: palette.lastMove, opacity: 0.5 }} />
                 )}
                 {isAlt && (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(127,209,168,0.42)" }} />
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(70,120,200,0.55)" }} />
                 )}
                 {isHover && (
                   <div style={{ position: "absolute", inset: 0, background: "rgba(140,120,220,0.40)" }} />

@@ -7,7 +7,7 @@ import { FlagButton } from "./FlagButton";
 import { perMoveKey } from "./migrations";
 import { GameContext } from "./context";
 import {
-  k, Card, NavBar, Classification, ThemedBoard, EvalBar,
+  k, Card, NavBar, Classification, ThemedBoard, EvalBar, Sparkline,
   Composer, ExtLinkIcon, CLASS_DEF,
 } from "./ui";
 
@@ -152,6 +152,93 @@ function firstSentence(text) {
   const stripped = stripAnnotations(text);
   const m = stripped.match(/^[^.!?]*[.!?]/);
   return (m ? m[0] : stripped).trim();
+}
+
+// Format the eval swing readout shown next to the sparkline header.
+function fmtSwing(before, after, perspective) {
+  if (after >= 99) return "+M";
+  if (after <= -99) return "−M";
+  const raw = after - before;
+  const fromUser = perspective === "black" ? -raw : raw;
+  const sign = fromUser >= 0 ? "+" : "−";
+  return `${sign}${Math.min(Math.abs(fromUser), 9.9).toFixed(1)}`;
+}
+
+function swingColor(before, after, perspective, kk) {
+  if (after >= 99 || after <= -99) return after >= 99 ? kk.accent : kk.bad;
+  const raw = after - before;
+  const fromUser = perspective === "black" ? -raw : raw;
+  return fromUser >= 0 ? kk.accent : kk.bad;
+}
+
+// Resize-observed sparkline wrapper, so the SVG width fits the parent card.
+function SparklineFit({ data, markIdx, h }) {
+  const ref = useRef(null);
+  const [w, setW] = useState(320);
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const cw = entries[0].contentRect.width;
+      if (cw > 0) setW(cw);
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={ref}>
+      <Sparkline data={data} markIdx={markIdx} w={w} h={h} />
+    </div>
+  );
+}
+
+// Renders one alt continuation as inline mono notation plus a one-line
+// rationale. Tap header to cycle through betterMoves when there's more than one.
+function BetterLine({ alt, alts, index, onCycle, moveNumber, fenBefore, fenAfter, onHover }) {
+  if (!alt) return null;
+  const ply = parseInt((moveNumber ?? "").match(/\d+/)?.[0] ?? "0", 10);
+  const isBlackMove = (moveNumber ?? "").includes("..");
+  const startToken = isBlackMove ? `${ply}…` : `${ply}.`;
+  return (
+    <div>
+      <div style={{ fontFamily: k.font.mono, fontSize: 13, lineHeight: 1.7, color: k.text }}>
+        <span style={{ color: k.textDim }}>{startToken}</span>{" "}
+        <span style={{ color: k.accent, fontWeight: 600 }}>{alt.move}</span>
+        <span
+          style={{
+            marginLeft: 8,
+            background: k.accentDim,
+            color: k.text,
+            padding: "1px 6px",
+            borderRadius: 4,
+            fontWeight: 600,
+            fontSize: 12,
+          }}
+        >
+          better
+        </span>
+      </div>
+      {alt.reason && (
+        <div style={{ marginTop: 8, fontSize: 12, color: k.textMute, lineHeight: 1.5 }}>
+          <AnnotatedText text={alt.reason} onHover={onHover} fenBefore={fenBefore} fenAfter={fenAfter} />
+        </div>
+      )}
+      {alts.length > 1 && (
+        <button
+          onClick={onCycle}
+          style={{
+            marginTop: 8,
+            background: "transparent", color: k.accent,
+            border: "none", padding: 0,
+            fontSize: 11, fontWeight: 600, cursor: "pointer",
+            fontFamily: k.font.sans,
+            letterSpacing: 0.4,
+          }}
+        >
+          Next alternative ({((index + 1) % alts.length) + 1}/{alts.length}) ›
+        </button>
+      )}
+    </div>
+  );
 }
 
 // ─── MoveAnalysisView ─────────────────────────────────────────────────────────
@@ -413,7 +500,6 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
             altToSq={altHighlight?.to}
             hoverFromSq={hoverHighlight?.from}
             hoverToSq={hoverHighlight?.to}
-            highlight={currentPos.to}
             flip={flip}
             rounded={12}
             showCoords
@@ -436,102 +522,89 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
         {/* Editorial headline */}
         {headline && (
           <div style={{ padding: "10px 22px 4px" }}>
-            <div className="kbz-editorial" style={{ fontSize: 19, lineHeight: 1.3, color: k.text }}>
+            <div className="kbz-editorial" style={{ fontSize: 20, lineHeight: 1.3, color: k.text }}>
               {headline}
             </div>
           </div>
         )}
 
-        {/* Eval bar */}
-        <div style={{ padding: "10px 22px 12px" }}>
-          <EvalBar before={evals[plyIdx - 1] ?? 0} after={evals[plyIdx]} perspective={perspective} />
-        </div>
-
-        {/* Analysis card */}
-        <div style={{ padding: "8px 16px 0" }}>
+        {/* Eval-swing card — sparkline + (optional) explanation + better line */}
+        <div style={{ padding: "16px 16px 0" }}>
           <Card pad={14}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span className="kbz-caps">Coach's read</span>
-              <span style={{ flex: 1 }} />
-              {explanation && (
-                <FlagButton context={{
-                  type: "moment", model: DEFAULT_MODEL, promptVersion: PROMPT_VERSION,
-                  gameId, pgn, promptSentToLlm: promptForFlag,
-                  move: moveLabel, ply: plyIdx, classification,
-                  evalBefore: evals[plyIdx - 1] ?? 0, evalAfter: evals[plyIdx],
-                  fenBefore, fenAfter, commentary: explanation,
-                  engineData: momentEngineData?.[plyIdx],
-                }} />
-              )}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              marginBottom: 10,
+            }}>
+              <span className="kbz-caps">Eval swing</span>
+              <span style={{ fontFamily: k.font.mono, fontSize: 12, fontWeight: 600, color: swingColor(evals[plyIdx - 1] ?? 0, evals[plyIdx], perspective, k) }}>
+                {fmtSwing(evals[plyIdx - 1] ?? 0, evals[plyIdx], perspective)}
+              </span>
             </div>
+            <SparklineFit data={evals} markIdx={plyIdx} h={56} />
 
-            {explanation ? (
-              <div style={{ fontSize: 14, color: k.text, lineHeight: 1.6 }}>
-                <AnnotatedText text={explanation} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
-              </div>
-            ) : loading ? (
-              <div style={{ fontSize: 13, color: k.textDim, fontStyle: "italic", animation: "kbz-pulse 1.4s ease-in-out infinite" }}>
-                Analyzing…
-              </div>
-            ) : error ? (
-              <div style={{ fontSize: 13, color: k.bad }}>Analysis failed. Check your API key.</div>
-            ) : analysisStatus === "loading" ? (
-              <div style={{ fontSize: 13, color: k.textDim, fontStyle: "italic", animation: "kbz-pulse 1.4s ease-in-out infinite" }}>Analyzing…</div>
-            ) : apiKey ? (
-              <button
-                onClick={runAnalysis}
-                style={{
-                  background: k.surface2, color: k.text,
-                  border: `1px solid ${k.hairline}`, borderRadius: 10,
-                  padding: "8px 14px", fontSize: 13, fontWeight: 500,
-                  cursor: "pointer", fontFamily: k.font.sans,
-                }}
-              >
-                Analyze this move →
-              </button>
-            ) : (
-              <div style={{ fontSize: 13, color: k.textDim }}>
-                Add an Anthropic API key from settings to enable AI analysis.
+            {/* Coach's read — soft paragraph below the sparkline */}
+            {(explanation || loading || analysisStatus === "loading" || (!apiKey && !explanation)) && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${k.hairline}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span className="kbz-caps">Coach's read</span>
+                  <span style={{ flex: 1 }} />
+                  {explanation && (
+                    <FlagButton context={{
+                      type: "moment", model: DEFAULT_MODEL, promptVersion: PROMPT_VERSION,
+                      gameId, pgn, promptSentToLlm: promptForFlag,
+                      move: moveLabel, ply: plyIdx, classification,
+                      evalBefore: evals[plyIdx - 1] ?? 0, evalAfter: evals[plyIdx],
+                      fenBefore, fenAfter, commentary: explanation,
+                      engineData: momentEngineData?.[plyIdx],
+                    }} />
+                  )}
+                </div>
+                {explanation ? (
+                  <div style={{ fontSize: 13, color: k.textMute, lineHeight: 1.55 }}>
+                    <AnnotatedText text={explanation} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
+                  </div>
+                ) : loading || analysisStatus === "loading" ? (
+                  <div style={{ fontSize: 13, color: k.textDim, fontStyle: "italic", animation: "kbz-pulse 1.4s ease-in-out infinite" }}>
+                    Analyzing…
+                  </div>
+                ) : error ? (
+                  <div style={{ fontSize: 13, color: k.bad }}>Analysis failed. Check your API key.</div>
+                ) : !apiKey ? (
+                  <div style={{ fontSize: 12, color: k.textDim }}>
+                    Add an API key from settings to enable AI analysis.
+                  </div>
+                ) : null}
+                {!explanation && apiKey && !loading && analysisStatus !== "loading" && !error && (
+                  <button
+                    onClick={runAnalysis}
+                    style={{
+                      marginTop: 8,
+                      background: k.surface2, color: k.text,
+                      border: `1px solid ${k.hairline}`, borderRadius: 10,
+                      padding: "6px 12px", fontSize: 12, fontWeight: 500,
+                      cursor: "pointer", fontFamily: k.font.sans,
+                    }}
+                  >
+                    Analyze this move →
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Better line */}
+            {/* Better line — inline mono notation, hidden cycle through alts */}
             {currentMoment?.betterMoves?.length > 0 && (
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${k.hairline}` }}>
                 <div className="kbz-caps" style={{ marginBottom: 8 }}>Better line</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {currentMoment.betterMoves.map((alt, i) => {
-                    const open = expandedAlt === i;
-                    return (
-                      <div key={i}>
-                        <button
-                          onClick={() => setExpandedAlt(open ? null : i)}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 10,
-                            width: "100%", textAlign: "left",
-                            background: open ? k.surface2 : "transparent",
-                            color: k.text,
-                            border: `1px solid ${k.hairline}`,
-                            borderRadius: 10, padding: "9px 12px",
-                            fontFamily: k.font.mono, fontSize: 13, fontWeight: 500,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <span style={{ color: k.accent }}>{alt.move}</span>
-                          <span style={{ flex: 1, color: k.textMute, fontFamily: k.font.sans, fontSize: 12 }}>
-                            {open ? "Hide reasoning" : "Why this works"}
-                          </span>
-                          <span style={{ color: k.textDim, fontSize: 12 }}>{open ? "▲" : "▼"}</span>
-                        </button>
-                        {open && (
-                          <div style={{ marginTop: 6, fontSize: 13, color: k.textMute, lineHeight: 1.55, padding: "0 4px" }}>
-                            <AnnotatedText text={alt.reason} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <BetterLine
+                  alt={currentMoment.betterMoves[expandedAlt ?? 0]}
+                  alts={currentMoment.betterMoves}
+                  index={expandedAlt ?? 0}
+                  onCycle={() => setExpandedAlt(((expandedAlt ?? 0) + 1) % currentMoment.betterMoves.length)}
+                  moveNumber={currentMoment.moveNumber}
+                  fenBefore={fenBefore}
+                  fenAfter={fenAfter}
+                  onHover={setHoverHighlight}
+                />
               </div>
             )}
           </Card>

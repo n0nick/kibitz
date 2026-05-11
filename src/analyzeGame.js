@@ -2,10 +2,10 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-// v1.3 — adds an editorial `headline` field per moment for the new design's
-// pull-quote treatment, and asks for markdown structure (bold action verbs,
-// bulleted reasons, "what you should have done") from the chat coach.
-export const PROMPT_VERSION = "v1.3";
+// v1.4 — tightens the narrative to ≤2 sentences and introduces the
+// ++positive++ / ~~negative~~ inline emphasis markers consumed by the
+// editorial pull-quote in GameOverview.
+export const PROMPT_VERSION = "v1.4";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -214,7 +214,7 @@ ${momentsList}
 
 Return ONLY valid JSON, no markdown:
 {
-  "narrative": "2-3 sentences: how the game unfolded and what decided it. Write it as editorial prose — calm, present-tense, no list of moves. May include [[piece|square]] or [[move|from-to]] annotations to anchor key squares; keep it readable when annotations are stripped.",
+  "narrative": "ONE editorial sentence (≤45 words), TWO at most. Calm, present-tense pull-quote — name the key turn, not a move-by-move recap. Use inline emphasis markers (do NOT use any other markdown):\n    • ++text++  — positive emphasis: the user's strong/sharp/winning play (renders with a soft sage highlight)\n    • ~~text~~  — negative emphasis: the cost, the swing against the user, blunders (renders in alert color)\n    • (text)    — natural parens for parenthetical asides (rendered muted)\n    Example: 'You played the opening ++sharply++ and were on top through move 21. Then, with a quiet position (nine minutes on the clock), you traded bishop for knight on c3 — and gave up ~~five pawns of advantage~~ in a single move.'\n    NO [[annotations]] in the narrative; NO **bold** or *italic*; just plain prose with the three markers above.",
   "pattern": "1-2 sentences: a recurring theme or lesson. Frame as a principle (eg. 'keep tension when ahead'), not as data the user can't verify (avoid stats like '73% accuracy' unless they're in the eval list).",
   "moments": [
     {

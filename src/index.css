@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 :root {
-  --kbz-bg: #0E0F10;
-  --kbz-surface: #17181B;
-  --kbz-surface-2: #1F2024;
-  --kbz-surface-3: #26272C;
-  --kbz-text: #E8E7E3;
-  --kbz-text-mute: #9A9994;
-  --kbz-text-dim: #5F5E5A;
-  --kbz-hairline: rgba(255,255,255,0.07);
-  --kbz-accent: #7FD1A8;
-  --kbz-accent-dim: rgba(127,209,168,0.16);
-  --kbz-warn: #E8B14A;
-  --kbz-bad: #D77467;
-  --kbz-win: #7FD1A8;
-  --kbz-loss: #D77467;
+  --kbz-bg: #F6F4EF;
+  --kbz-surface: #FFFFFF;
+  --kbz-surface-2: #EFEDE6;
+  --kbz-surface-3: #E6E3DA;
+  --kbz-text: #1A1A1C;
+  --kbz-text-mute: #6B6863;
+  --kbz-text-dim: #9A968E;
+  --kbz-hairline: rgba(0,0,0,0.07);
+  --kbz-accent: #5BA886;
+  --kbz-accent-dim: rgba(127,209,168,0.22);
+  --kbz-warn: #C58A2A;
+  --kbz-bad: #C25A4D;
+  --kbz-win: #5BA886;
+  --kbz-loss: #C25A4D;
   --kbz-draw: #A8A39A;
   --kbz-sans: "Geist", -apple-system, system-ui, sans-serif;
   --kbz-editorial: "Newsreader", "Geist", serif;

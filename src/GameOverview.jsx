@@ -15,28 +15,56 @@ function stripAnnotations(text) {
   return text.replace(/\[\[([^\]|]*?)(?:\|[^\]]*?)?\]\]/g, "$1");
 }
 
-// Renders coach prose inline with **bold**, *italic*, and [[annotations]]
-// rendered as soft accent spans. Hover handler optional.
-function ProseText({ text, accent }) {
+// Renders coach prose inline. Supports four lightweight markers that mirror
+// the editorial spec from the design canvas:
+//   ++text++     — positive emphasis (soft accent highlight)
+//   ~~text~~     — cost / negative framing (alert color, semibold)
+//   (text)       — automatically muted by `mutedParens` mode
+//   **text**     — bold (used by the chat coach, less common in narratives)
+//   *text*       — italic (likewise)
+//   [[disp|to]]  — board annotation
+function ProseText({ text, mutedParens = false }) {
   if (!text) return null;
-  const tokens = text.split(/(\[\[[^\]]*\]\]|\*\*[^*]+\*\*|\*[^*]+\*)/);
+  const splitter = /(\[\[[^\]]*\]\]|\+\+[^+\n]+\+\+|~~[^~\n]+~~|\*\*[^*\n]+\*\*|\*[^*\n]+\*)/;
+  const tokens = text.split(splitter);
   return tokens.map((tok, i) => {
     if (!tok) return null;
     if (tok.startsWith("[[") && tok.endsWith("]]")) {
-      const inside = tok.slice(2, -2);
-      const display = inside.split("|")[0];
+      const display = tok.slice(2, -2).split("|")[0];
       return (
         <span
           key={i}
           style={{
-            background: accent ? k.accentDim : "transparent",
-            color: accent ? k.text : "inherit",
-            padding: accent ? "0 4px" : 0,
-            borderRadius: accent ? 3 : 0,
+            background: k.accentDim,
+            color: k.text,
+            padding: "0 4px",
+            borderRadius: 3,
             fontWeight: 500,
           }}
         >
           {display}
+        </span>
+      );
+    }
+    if (tok.startsWith("++") && tok.endsWith("++")) {
+      return (
+        <span
+          key={i}
+          style={{
+            background: k.accentDim,
+            color: k.text,
+            padding: "0 5px",
+            borderRadius: 3,
+          }}
+        >
+          {tok.slice(2, -2)}
+        </span>
+      );
+    }
+    if (tok.startsWith("~~") && tok.endsWith("~~")) {
+      return (
+        <span key={i} style={{ color: k.bad, fontWeight: 500 }}>
+          {tok.slice(2, -2)}
         </span>
       );
     }
@@ -45,6 +73,15 @@ function ProseText({ text, accent }) {
     }
     if (tok.startsWith("*") && tok.endsWith("*") && tok.length > 2) {
       return <em key={i} style={{ fontStyle: "italic" }}>{tok.slice(1, -1)}</em>;
+    }
+    // Plain text — optionally mute parenthetical asides for the narrative spec.
+    if (mutedParens && tok.includes("(")) {
+      const parts = tok.split(/(\([^)]*\))/g);
+      return parts.map((p, j) =>
+        p.startsWith("(") && p.endsWith(")")
+          ? <span key={`${i}-${j}`} style={{ color: k.textMute }}>{p}</span>
+          : <span key={`${i}-${j}`}>{p}</span>
+      );
     }
     return <span key={i}>{tok}</span>;
   });
@@ -333,8 +370,8 @@ export function GameOverview({
               <div style={{ height: 18, width: "60%", background: k.surface2, borderRadius: 6, animation: "kbz-pulse 1.4s ease-in-out infinite" }} />
             </div>
           ) : summary.narrative ? (
-            <Editorial size={20} style={{ lineHeight: 1.35 }}>
-              <ProseText text={summary.narrative} accent />
+            <Editorial size={20} style={{ lineHeight: 1.4 }}>
+              <ProseText text={summary.narrative} mutedParens />
             </Editorial>
           ) : (
             <div style={{ fontSize: 13, color: k.textDim }}>
@@ -466,10 +503,12 @@ export function GameOverview({
   );
 }
 
-// Wrapper that measures container width and feeds the sparkline accordingly.
+// Wrapper that measures container width, feeds it to the sparkline, and
+// tracks pointer position to show the eval value + ply at the cursor.
 function SparklineFit({ data, markIdx, h }) {
   const ref = useRef(null);
   const [w, setW] = useState(360);
+  const [hoverIdx, setHoverIdx] = useState(null);
   useEffect(() => {
     if (!ref.current) return;
     const ro = new ResizeObserver((entries) => {
@@ -479,9 +518,68 @@ function SparklineFit({ data, markIdx, h }) {
     ro.observe(ref.current);
     return () => ro.disconnect();
   }, []);
+
+  const onMove = (e) => {
+    if (!ref.current || !data || data.length < 2) return;
+    const rect = ref.current.getBoundingClientRect();
+    const cx = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
+    const rel = Math.max(0, Math.min(1, cx / Math.max(1, rect.width)));
+    const idx = Math.round(rel * (data.length - 1));
+    setHoverIdx(idx);
+  };
+  const onLeave = () => setHoverIdx(null);
+
+  const displayIdx = hoverIdx ?? markIdx;
+  const displayEv = displayIdx != null && displayIdx >= 0 && displayIdx < data.length ? data[displayIdx] : null;
+  const fmt = (v) => v >= 99 ? "+M" : v <= -99 ? "−M" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
+  const moveNum = displayIdx != null && displayIdx > 0 ? Math.ceil(displayIdx / 2) : null;
+  const side = displayIdx != null && displayIdx > 0 ? (displayIdx % 2 === 1 ? "w" : "b") : null;
+
   return (
-    <div ref={ref}>
-      <Sparkline data={data} markIdx={markIdx} w={w} h={h} />
+    <div style={{ position: "relative" }}>
+      {/* Hover readout */}
+      {hoverIdx != null && displayEv != null && (
+        <div
+          style={{
+            position: "absolute",
+            top: -28,
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: k.font.mono,
+              fontSize: 11,
+              padding: "3px 8px",
+              borderRadius: 6,
+              background: k.surface,
+              color: k.text,
+              border: `1px solid ${k.hairline}`,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            }}
+          >
+            <span style={{ color: k.textMute }}>
+              {moveNum != null ? `${moveNum}${side === "w" ? "." : "…"}` : "start"}
+            </span>{" "}
+            <span style={{ color: displayEv >= 0 ? k.accent : k.bad }}>{fmt(displayEv)}</span>
+          </span>
+        </div>
+      )}
+      <div
+        ref={ref}
+        onMouseMove={onMove}
+        onMouseLeave={onLeave}
+        onTouchStart={onMove}
+        onTouchMove={onMove}
+        onTouchEnd={onLeave}
+        style={{ cursor: "crosshair", touchAction: "none" }}
+      >
+        <Sparkline data={data} markIdx={hoverIdx ?? markIdx} w={w} h={h} />
+      </div>
     </div>
   );
 }
