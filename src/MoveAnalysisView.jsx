@@ -261,18 +261,6 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
       } catch {}
     }
 
-    // Debounce engine preload — cancel on rapid navigation to avoid concurrent WASM workers
-    clearTimeout(engineTimerRef.current);
-    if (positions[plyIdx - 1]?.fen) {
-      engineTimerRef.current = setTimeout(() => {
-        computeSingleMoveEngineData(positions, plyIdx, browserEngine, {
-          depth: 14,
-          lichessGameId: gameSource(gameId) === 'lichess' ? gameId : null,
-          numPv: 10,
-        }).then(setRichEngData).catch(() => {});
-      }, 600);
-    }
-    return () => clearTimeout(engineTimerRef.current);
   }, [plyIdx, gameId, tone]);
 
   // Keyboard navigation
@@ -348,16 +336,25 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
     setChatHistory(prev => [...prev, { role: "user", text: q }]);
     try {
       const fenCurrent = fenAfter ?? fenBefore;
-      // Use the pre-loaded 10-PV engine data for richer chat context
+      // Load 10-PV engine data lazily on first chat message
+      let engData = richEngData;
+      if (!engData && fenCurrent) {
+        engData = await computeSingleMoveEngineData(positions, plyIdx, browserEngine, {
+          depth: 14,
+          lichessGameId: gameSource(gameId) === 'lichess' ? gameId : null,
+          numPv: 10,
+        }).catch(() => null);
+        if (engData) setRichEngData(engData);
+      }
       const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
-      const engineLine = richEngData?.top_alternatives?.length
-        ? `Top ${richEngData.top_alternatives.length} engine moves at this position:\n` +
-          richEngData.top_alternatives.map((alt, i) => {
+      const engineLine = engData?.top_alternatives?.length
+        ? `Top ${engData.top_alternatives.length} engine moves at this position:\n` +
+          engData.top_alternatives.map((alt, i) => {
             const ev = alt.mate != null ? (alt.mate > 0 ? '+M' : '-M') : fmtCp(alt.eval_cp);
             const cont = alt.pv_san?.slice(1, 4).join(' ');
             return `  ${i + 1}. ${alt.san} (${ev})${cont ? ` — continuation: ${cont}` : ''}`;
           }).join('\n') +
-          `\nSystem prompt for chat: You have engine evaluations for the top ${richEngData.top_alternatives.length} candidate moves at this position. If the user asks about a move not in this list, acknowledge that you don't have engine-verified analysis for that move and respond cautiously based on general principles. Do not invent tactical sequences.`
+          `\nSystem prompt for chat: You have engine evaluations for the top ${engData.top_alternatives.length} candidate moves at this position. If the user asks about a move not in this list, acknowledge that you don't have engine-verified analysis for that move and respond cautiously based on general principles. Do not invent tactical sequences.`
         : null;
 
       const moment = currentMoment ?? {

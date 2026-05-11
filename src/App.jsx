@@ -669,6 +669,7 @@ export default function App() {
   const [localProgress, setLocalProgress] = useState(null); // null | { current, total }
   const [perspective, setPerspective] = useState(null); // null | 'white' | 'black'
   const [drillInPly, setDrillInPly] = useState(null);
+  const [overviewCard, setOverviewCard] = useState(0);
   const pollingRef = useRef(null);
   const localAbortRef = useRef(null);
 
@@ -898,6 +899,11 @@ export default function App() {
   };
 
   const handleDrillIn = (plyIdx) => {
+    if (gameData) {
+      const tps = selectMoments(gameData.moments, gameData.evals, MAX_OVERVIEW_MOMENTS);
+      const cardIdx = tps.findIndex(m => m.moveIdx === plyIdx) + 1;
+      setOverviewCard(cardIdx > 0 ? cardIdx : 0);
+    }
     setDrillInPly(plyIdx);
     setScreen("drill-in");
     const params = new URLSearchParams();
@@ -932,6 +938,7 @@ export default function App() {
           analysisStatus={analysisStatus}
           localProgress={localProgress}
           startLocalAnalysis={startLocalAnalysis}
+          initialCard={overviewCard}
         />
       </GameContext.Provider>
     );

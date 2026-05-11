@@ -75,7 +75,7 @@ function OverviewCard({ summary, analysisStatus, pgn, gameId, promptSentToLlm })
           </div>
         )}
       </div>
-      <p className="text-[10px] text-zinc-700 text-center mt-4">Swipe to see turning points →</p>
+      <p className="text-[10px] text-zinc-400 text-center mt-4">swipe to explore →</p>
     </div>
   );
 }
@@ -146,9 +146,7 @@ function BridgeCard({ onStartReview, chatHistory, chatInput, setChatInput, onSen
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatHistory]);
 
   return (
-    <div className="h-full flex flex-col px-4 py-5 overflow-y-auto">
-      <div className="flex-1" />
-
+    <div className="h-full flex flex-col justify-center px-4 py-5 overflow-y-auto">
       <div className="space-y-4">
         <div className="text-center">
           <p className="text-sm text-zinc-500 mb-3">Want to go deeper?</p>
@@ -232,16 +230,23 @@ function PerspectivePrompt({ onChoose }) {
 
 export function GameOverview({
   game, gameId, perspective, onPerspectiveSet, onReset, onDrillIn, onStartReview,
-  apiKey, tone, analysisStatus, localProgress, startLocalAnalysis,
+  apiKey, tone, analysisStatus, localProgress, startLocalAnalysis, initialCard = 0,
 }) {
   const { positions, evals, summary, pgn, promptSentToLlm } = game;
   // Cap to MAX_OVERVIEW_MOMENTS (5), proportionally distributed across game thirds
   const moments = selectMoments(game.moments, evals, MAX_OVERVIEW_MOMENTS);
-  const [activeCard, setActiveCard] = useState(0);
+  const [activeCard, setActiveCard] = useState(initialCard);
   const [gameChatHistory, setGameChatHistory] = useState([]);
   const [gameChatInput, setGameChatInput] = useState('');
   const [gameChatSending, setGameChatSending] = useState(false);
   const reelRef = useRef(null);
+
+  // Scroll to initialCard on mount (restores position after back-nav from drill-in)
+  useEffect(() => {
+    if (initialCard > 0 && reelRef.current) {
+      reelRef.current.scrollLeft = reelRef.current.clientWidth * initialCard;
+    }
+  }, []);
 
   const flip = perspective === 'black';
   const totalCards = 1 + moments.length + 1; // overview + turning points + bridge
@@ -302,16 +307,13 @@ export function GameOverview({
               )}
             </div>
           </div>
-          {/* Mobile progress dots + swipe hint */}
+          {/* Mobile progress dots */}
           <div className="md:hidden flex items-center gap-2 pt-1.5 shrink-0">
             <div className="flex items-center gap-1">
               {Array.from({ length: totalCards }, (_, i) => (
                 <div key={i} className={`rounded-full transition-all ${i === activeCard ? 'w-4 h-1.5 bg-zinc-300' : 'w-1.5 h-1.5 bg-zinc-700'}`} />
               ))}
             </div>
-            {activeCard === 0 && (
-              <span className="text-[9px] text-zinc-400 tracking-wide">swipe to explore →</span>
-            )}
           </div>
         </div>
 
