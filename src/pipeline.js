@@ -1,3 +1,4 @@
+import { Chess } from 'chess.js';
 import { parseGame, reclassifyWithEvals } from './parseGame.js';
 import { analyzeGameWithUsage, buildPrompt, selectMoments, scrubExplanation } from './analyzeGame.js';
 
@@ -66,6 +67,76 @@ export async function computeMomentEngineData(game, engine, { depth = 12 } = {})
     };
   }
   return momentEngineData;
+}
+
+function uciToSan(fen, uciMoves) {
+  try {
+    const chess = new Chess(fen);
+    const sans = [];
+    for (const uci of uciMoves) {
+      const move = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+      if (!move) break;
+      sans.push(move.san);
+    }
+    return sans;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchLichessCloudEval(fen, multiPv, needsFlip) {
+  const sign = needsFlip ? -1 : 1;
+  const res = await fetch(`https://lichess.org/api/cloud-eval?fen=${encodeURIComponent(fen)}&multiPv=${multiPv}`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.pvs?.length) return null;
+  return data.pvs.map(pv => {
+    const uciMoves = pv.moves?.split(' ') ?? [];
+    const pvSan = uciToSan(fen, uciMoves);
+    return {
+      san: pvSan[0] ?? null,
+      eval_cp: pv.cp != null ? Math.round(pv.cp * sign) : null,
+      mate: pv.mate != null ? (needsFlip ? -pv.mate : pv.mate) : null,
+      pv_san: pvSan.slice(0, 5),
+    };
+  }).filter(alt => alt.san);
+}
+
+// Computes engine data for a single ply (used for lazy per-move analysis).
+// Tries Lichess cloud-eval first if lichessGameId provided, falls back to local engine.
+// Returns { top_alternatives, refutation_pv } in the same shape as computeMomentEngineData.
+export async function computeSingleMoveEngineData(positions, plyIdx, engine, { depth = 18, lichessGameId } = {}) {
+  const posBefore = positions[plyIdx - 1];
+  const fenBefore = posBefore?.fen;
+  if (!fenBefore) return null;
+  const needsFlip = posBefore.color === 'w';
+  const sign = needsFlip ? -1 : 1;
+
+  let topAlternatives = null;
+  if (lichessGameId) {
+    topAlternatives = await fetchLichessCloudEval(fenBefore, 3, needsFlip).catch(() => null);
+  }
+  if (!topAlternatives && engine?.analyzePosition) {
+    const altLines = await engine.analyzePosition(fenBefore, depth, 3).catch(() => null);
+    topAlternatives = (altLines ?? []).map(l => ({
+      san: l.pv?.[0] ?? null,
+      eval_cp: l.mate != null ? null : Math.round((l.score ?? 0) * 100 * sign),
+      mate: l.mate != null ? (needsFlip ? -l.mate : l.mate) : null,
+      pv_san: l.pv?.slice(0, 5) ?? [],
+    })).filter(alt => alt.san);
+  }
+
+  let refutationPv = [];
+  const fenAfter = positions[plyIdx]?.fen;
+  if (fenAfter && engine?.analyzePosition) {
+    const refLines = await engine.analyzePosition(fenAfter, depth, 1).catch(() => null);
+    refutationPv = refLines?.[0]?.pv?.slice(0, 5) ?? [];
+  }
+
+  return {
+    top_alternatives: topAlternatives ?? [],
+    refutation_pv: refutationPv,
+  };
 }
 
 function scrubResultExplanations(result, momentEngineData) {

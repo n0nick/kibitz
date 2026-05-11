@@ -45,8 +45,8 @@ async function callApi(messages, apiKey, { system, maxTokens = 1024, model = DEF
 
 export const ANNOTATION_RULES = `Board annotations — USE THEM in every explanation and reason:
 - Square reference: [[e6]]
-- Piece on a square: [[Ng5|g5]]
-- Move (MUST include explicit from–to): [[Nxe6|g5-e6]]
+- Piece on a square: [[<piece><square>|<square>]] — for example, a pawn on e4 would be [[Pe4|e4]]
+- Move (MUST include explicit from–to): [[<SAN>|<from>-<to>]] — for example, the standard developing move would be [[Nf3|g1-f3]]
 - NEVER use [[SAN]] without a pipe — always provide |from-to
 - Use lowercase algebraic squares (a1–h8)
 - Include 2–3 annotations per explanation; annotate every key square and move`;
@@ -269,16 +269,40 @@ export async function analyzeGameWithUsage(pgn, moments, summary, evals, apiKey,
   return { result: JSON.parse(repairJson(match[0])), usage, prompt };
 }
 
-export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone }, apiKey) {
+export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone, engineData }, apiKey) {
   const fmt = (v) => (v >= 99 ? "M" : v <= -99 ? "-M" : v.toFixed(1));
-  const prompt = `Analyze this chess position in 2-3 sentences. Tone: ${toneDesc(tone)}
+  const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
+
+  let engineSection = '';
+  if (engineData?.top_alternatives?.length > 0) {
+    engineSection += '\nEngine alternatives (what to play instead):';
+    engineData.top_alternatives.forEach((alt, i) => {
+      if (!alt.san) return;
+      const ev = alt.mate != null ? (alt.mate > 0 ? '+M' : '-M') : fmtCp(alt.eval_cp);
+      const pv = alt.pv_san?.slice(1, 4).join(' ');
+      engineSection += `\n  ${i + 1}. ${alt.san} (${ev})${pv ? ` — continuation: ${pv}` : ''}`;
+    });
+  }
+  if (engineData?.refutation_pv?.length > 0) {
+    engineSection += `\nEngine continuation after ${notation}: ${engineData.refutation_pv.slice(0, 4).join(' ')}`;
+  }
+
+  const systemLine = engineData
+    ? 'You are a chess coach. You are NOT a chess engine. All chess truth comes from the engine output provided below. You translate engine analysis into coaching prose.\n\n'
+    : '';
+
+  const safetyRules = engineData ? `\nRules:
+- NEVER name a move anywhere in your response unless it appears verbatim in the engine alternatives or continuation provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
+- Do not make claims about tactical motifs (pins, forks, skewers, discovered attacks) unless the geometry is visible in the provided engine lines.` : '';
+
+  const prompt = `${systemLine}Analyze this chess position in 2-3 sentences. Tone: ${toneDesc(tone)}
 
 Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown opening"})
 Move: ${moveNumber} ${notation} (${classification})
-Eval: ${fmt(evalBefore)} → ${fmt(evalAfter)}${fen ? `\nPosition (FEN): ${fen}` : ""}
+Eval: ${fmt(evalBefore)} → ${fmt(evalAfter)}${fen ? `\nPosition (FEN): ${fen}` : ''}${engineSection}
 
 Focus on what's important about this position and what each player should consider.
-
+${safetyRules}
 ${ANNOTATION_RULES}
 
 Reply with plain text only (no JSON).`;

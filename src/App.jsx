@@ -5,7 +5,7 @@ import { FlagButton } from "./FlagButton";
 import ReportViewer from "./ReportViewer";
 import { fetchLichessAccount, fetchLichessRecentGames } from "./lichess";
 import { analyzePosition, browserEngine, engineLineText } from "./stockfish";
-import { mergeAnalysis, analyzePositions, analyzeWithClaude } from "./pipeline";
+import { mergeAnalysis, analyzePositions, analyzeWithClaude, computeSingleMoveEngineData } from "./pipeline";
 
 // ─── Game context ─────────────────────────────────────────────────────────────
 
@@ -1251,6 +1251,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
   }, [chatHistory]);
   const [analysisCache, setAnalysisCache] = useState({});
   const [analysisCachePrompts, setAnalysisCachePrompts] = useState({});
+  const [perMoveEngineData, setPerMoveEngineData] = useState({});
   const [expandedAlt, setExpandedAlt] = useState(null);
   const [hoverHighlight, setHoverHighlight] = useState(null);
   const [momentLoading, setMomentLoading] = useState({});
@@ -1417,6 +1418,15 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
             onClick={async () => {
               setMomentLoading((prev) => ({ ...prev, [currentMoment.id]: "loading" }));
               try {
+                const plyForMoment = currentMoment.moveIdx;
+                const cachedEngineData = perMoveEngineData[plyForMoment];
+                const engineData = cachedEngineData ?? await computeSingleMoveEngineData(
+                  positions, plyForMoment, browserEngine,
+                  { lichessGameId: gameSource(ctxGameId) === "lichess" ? ctxGameId : null }
+                ).catch(() => null);
+                if (engineData && !cachedEngineData) {
+                  setPerMoveEngineData(prev => ({ ...prev, [plyForMoment]: engineData }));
+                }
                 const { text, prompt: singlePrompt } = await analyzeSinglePosition({
                   summary,
                   moveNumber: currentMoment.moveNumber,
@@ -1426,6 +1436,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
                   evalAfter: evals[currentMoment.moveIdx],
                   fen: positions[currentMoment.moveIdx]?.fen,
                   tone,
+                  engineData,
                 }, apiKey);
                 onPatchMoment(currentMoment.id, text, singlePrompt);
                 setMomentLoading((prev) => ({ ...prev, [currentMoment.id]: "done" }));
@@ -1514,6 +1525,14 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
                 setAnalysisCache((prev) => ({ ...prev, [moveIdx]: "loading" }));
                 try {
                   const mn = `${Math.ceil(moveIdx / 2)}${moveIdx % 2 === 1 ? "." : "..."}`;
+                  const cachedEngineData = perMoveEngineData[moveIdx];
+                  const engineData = cachedEngineData ?? await computeSingleMoveEngineData(
+                    positions, moveIdx, browserEngine,
+                    { lichessGameId: gameSource(ctxGameId) === "lichess" ? ctxGameId : null }
+                  ).catch(() => null);
+                  if (engineData && !cachedEngineData) {
+                    setPerMoveEngineData(prev => ({ ...prev, [moveIdx]: engineData }));
+                  }
                   const { text, prompt: singlePrompt } = await analyzeSinglePosition({
                     summary,
                     moveNumber: mn,
@@ -1523,6 +1542,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
                     evalAfter: evals[moveIdx],
                     fen: currentPos.fen,
                     tone,
+                    engineData,
                   }, apiKey);
                   setAnalysisCache((prev) => ({ ...prev, [moveIdx]: text }));
                   setAnalysisCachePrompts((prev) => ({ ...prev, [moveIdx]: singlePrompt }));
