@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { chatAboutGame, selectMoments, MAX_OVERVIEW_MOMENTS, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
 import { FlagButton } from "./FlagButton";
 import {
-  k, Card, Section, Editorial, NavBar, HoverSparkline, Classification, ThemedBoard,
+  useKbz, Card, Section, Editorial, NavBar, HoverSparkline, Classification, ThemedBoard,
   MoveTag, Composer,
 } from "./ui";
 import { biggestSwingIdx } from "./design";
@@ -24,6 +24,7 @@ function stripAnnotations(text) {
 //   *text*       — italic (likewise)
 //   [[disp|to]]  — board annotation
 function ProseText({ text, mutedParens = false }) {
+  const { k } = useKbz();
   if (!text) return null;
   const splitter = /(\[\[[^\]]*\]\]|\+\+[^+\n]+\+\+|~~[^~\n]+~~|\*\*[^*\n]+\*\*|\*[^*\n]+\*)/;
   const tokens = text.split(splitter);
@@ -90,6 +91,7 @@ function ProseText({ text, mutedParens = false }) {
 // ─── Perspective prompt — modal overlay on first load ───────────────────────
 
 function PerspectivePrompt({ onChoose }) {
+  const { k } = useKbz();
   return (
     <div
       style={{
@@ -137,6 +139,7 @@ function PerspectivePrompt({ onChoose }) {
 // ─── Pattern card — coach's recurring observation ───────────────────────────
 
 function PatternCard({ pattern }) {
+  const { k } = useKbz();
   const glyph = pattern.glyph ?? "↺";
   const tag = pattern.tag ?? "Principle";
   return (
@@ -169,6 +172,7 @@ function PatternCard({ pattern }) {
 // ─── Turning-point row — used inline below the CTA ──────────────────────────
 
 function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClick, awaitingLlm }) {
+  const { k } = useKbz();
   if (!position) return null;
   const teaser = moment.card_teaser ?? stripAnnotations(moment.explanation ?? "");
   const swingColor = moment.classification === "blunder"
@@ -230,6 +234,7 @@ export function GameOverview({
   game, gameId, perspective, onPerspectiveSet, onReset, onDrillIn, onStartReview,
   apiKey, tone, analysisStatus, localProgress, startLocalAnalysis,
 }) {
+  const { k } = useKbz();
   const { positions, evals, summary, pgn, promptSentToLlm } = game;
   const moments = selectMoments(game.moments, evals, MAX_OVERVIEW_MOMENTS);
   const [gameChatHistory, setGameChatHistory] = useState([]);

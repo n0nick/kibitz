@@ -7,7 +7,7 @@ import { FlagButton } from "./FlagButton";
 import { perMoveKey } from "./migrations";
 import { GameContext } from "./context";
 import {
-  k, Card, NavBar, Classification, ThemedBoard, EvalBar, HoverSparkline,
+  useKbz, Card, NavBar, Classification, ThemedBoard, EvalBar, HoverSparkline,
   Composer, ExtLinkIcon, CLASS_DEF,
 } from "./ui";
 
@@ -50,6 +50,7 @@ function parseAnnotation(raw, fenBefore, fenAfter) {
 }
 
 export function AnnotatedText({ text, onHover, fenBefore, fenAfter }) {
+  const { k } = useKbz();
   if (!text) return null;
   const parts = text.split(/(\[\[[^\]]*\]\])/);
   return parts.map((part, i) => {
@@ -77,6 +78,7 @@ export function AnnotatedText({ text, onHover, fenBefore, fenAfter }) {
 }
 
 function RichText({ text, onHover, fenBefore, fenAfter }) {
+  const { k } = useKbz();
   if (!text) return null;
   function renderInline(str) {
     const tokens = str.split(/(\[\[[^\]]*\]\]|\*\*[^*]+\*\*|\*[^*]+\*)/);
@@ -186,6 +188,7 @@ function swingColor(before, after, perspective, kk) {
 // Renders one alt continuation as inline mono notation plus a one-line
 // rationale. Tap header to cycle through betterMoves when there's more than one.
 function BetterLine({ alt, alts, index, onCycle, moveNumber, fenBefore, fenAfter, onHover }) {
+  const { k } = useKbz();
   if (!alt) return null;
   const ply = parseInt((moveNumber ?? "").match(/\d+/)?.[0] ?? "0", 10);
   const isBlackMove = (moveNumber ?? "").includes("..");
@@ -236,6 +239,7 @@ function BetterLine({ alt, alts, index, onCycle, moveNumber, fenBefore, fenAfter
 // ─── MoveAnalysisView ─────────────────────────────────────────────────────────
 
 export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective, onBack, analysisStatus, onPatchMoment, turningPoints = [] }) {
+  const { k } = useKbz();
   const game = useContext(GameContext);
   const { positions, evals, momentByMoveIdx, summary, pgn, promptSentToLlm, momentEngineData } = game;
 

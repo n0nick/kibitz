@@ -9,7 +9,7 @@ import { runMigrations, evalsKey } from "./migrations";
 import { GameOverview } from "./GameOverview";
 import { MoveAnalysisView } from "./MoveAnalysisView";
 import { GameContext } from "./context";
-import { k, Card, Section, Editorial, NavBar, Sparkline, OpponentDot, Stat, ExtLinkIcon } from "./ui";
+import { useKbz, Card, Section, Editorial, NavBar, Sparkline, OpponentDot, Stat, ExtLinkIcon } from "./ui";
 
 // ─── Demo game (Opera Game, 1858) ─────────────────────────────────────────────
 
@@ -316,6 +316,7 @@ const timeAgo = (ms) => {
 
 // Tiny inline sparkline used inside game cards on the home screen.
 function MiniSpark({ evals, markIdx }) {
+  const { k } = useKbz();
   const w = 64, h = 22, max = 3;
   if (!evals || evals.length < 2) {
     return (
@@ -359,6 +360,7 @@ function resultForUser(game, lichessUser) {
 }
 
 function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, setApiKey, tone, setTone, lichessToken, lichessUser, setLichess }) {
+  const { k, mode: themeMode, setTheme } = useKbz();
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingId, setLoadingId] = useState(null);
@@ -813,6 +815,10 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
             </div>
           </DrawerField>
 
+          <DrawerField label="Theme">
+            <ThemePicker value={themeMode} onChange={setTheme} />
+          </DrawerField>
+
           <div style={{ paddingTop: 12, borderTop: `1px solid ${k.hairline}`, marginTop: 8 }}>
             <a
               href="https://github.com/n0nick/kibitz"
@@ -858,6 +864,7 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
 // ─── Add-game screen (full-screen, matches design 02 · First run) ────────────
 
 function AddGameScreen({ onClose, onOpenSettings, onSubmit, url, setUrl, isPgn, canLoad, loading, forceReanalyze, setForceReanalyze, lichessUser, onDemo }) {
+  const { k } = useKbz();
   const [pgnExpanded, setPgnExpanded] = useState(isPgn || url.length > 0);
   return (
     <div
@@ -1046,6 +1053,7 @@ function AddGameScreen({ onClose, onOpenSettings, onSubmit, url, setUrl, isPgn, 
 
 // Small atom — source-option row used inside AddGameScreen cards.
 function SourceRow({ glyph, glyphColor, title, sub, trail }) {
+  const { k } = useKbz();
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
       <div
@@ -1070,6 +1078,7 @@ function SourceRow({ glyph, glyphColor, title, sub, trail }) {
 
 // Decorative 120px K-vs-k endgame board used on the Add-a-game screen.
 function TinyEndgameBoard() {
+  const { k } = useKbz();
   const palette = k.board;
   // 2k5 / 8 / 8 / 8 / 8 / 5K2 / 8 / 8 — black king on c6, white king on f3
   const rows = ["8","8","2k5","8","8","5K2","8","8"];
@@ -1124,6 +1133,7 @@ function TinyEndgameBoard() {
 // ─── Small drawer used by Settings + Add-game ────────────────────────────────
 
 function Drawer({ children, onClose, title, subtitle }) {
+  const { k } = useKbz();
   return (
     <>
       <div
@@ -1173,6 +1183,7 @@ function Drawer({ children, onClose, title, subtitle }) {
 }
 
 function DrawerField({ label, hint, children }) {
+  const { k } = useKbz();
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
@@ -1184,7 +1195,48 @@ function DrawerField({ label, hint, children }) {
   );
 }
 
+// Three-up segmented control: System / Light / Dark. The currently active
+// option carries the surface-2 background; selecting "system" clears the
+// user's persisted preference so the OS pref drives the theme.
+function ThemePicker({ value, onChange }) {
+  const { k } = useKbz();
+  const opts = [
+    { v: "system", label: "System" },
+    { v: "light", label: "Light" },
+    { v: "dark", label: "Dark" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      {opts.map((o) => {
+        const on = value === o.v;
+        return (
+          <button
+            key={o.v}
+            onClick={() => onChange(o.v)}
+            style={{
+              flex: 1,
+              padding: "8px 0",
+              borderRadius: 10,
+              fontFamily: k.font.sans,
+              fontSize: 12,
+              fontWeight: 500,
+              color: on ? k.text : k.textMute,
+              background: on ? k.surface2 : "transparent",
+              border: `1px solid ${on ? k.hairline : "transparent"}`,
+              cursor: "pointer",
+              letterSpacing: 0.2,
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function DrawerInputRow({ type, value, onChange, onBlur, onEnter, placeholder, monospace, toggleLabel, onToggle }) {
+  const { k } = useKbz();
   return (
     <div style={{ display: "flex", gap: 8 }}>
       <input
@@ -1235,6 +1287,7 @@ function DrawerInputRow({ type, value, onChange, onBlur, onEnter, placeholder, m
 //   "engine"         → local Stockfish pass running
 //   "llm"            → LLM drafting narrative
 function LoadingScreen({ phase = "fetch", summary, localProgress, startLocalAnalysis, onCancel }) {
+  const { k } = useKbz();
   const order = ["fetch", "engine", "llm"];
   const phaseIdx = phase === "awaiting-evals" ? 1 : Math.max(0, order.indexOf(phase));
 

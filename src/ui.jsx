@@ -4,17 +4,94 @@
 // design bundle's surface system (filled cards, hairlines, glyph-and-caps
 // classifications) without polluting the global Tailwind config.
 
-import { useRef, useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { kbzTokens, CLASS_DEF, sparklinePath } from "./design.js";
 
+// Module-level fallback token set — used by anything that reads tokens
+// outside a React component (rare) and by primitives that haven't been
+// reached by the theme provider for some reason. Components that want to
+// react to theme flips should call useKbz() instead.
 export const tokens = kbzTokens("light");
 export { CLASS_DEF };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Theme provider + hook. The provider:
+//   • resolves initial theme from localStorage → system pref → "light"
+//   • persists user's explicit choice
+//   • flips the `data-theme` attr on <html> so CSS vars track the JS tokens
+//   • updates the iOS theme-color meta tag
+
+const KbzThemeContext = createContext(null);
+
+function readSavedTheme() {
+  try {
+    const t = localStorage.getItem("kibitz-theme");
+    if (t === "light" || t === "dark") return t;
+  } catch {}
+  return null;
+}
+
+function systemPref() {
+  if (typeof window === "undefined" || !window.matchMedia) return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+export function KbzThemeProvider({ children }) {
+  const [theme, setThemeRaw] = useState(() => readSavedTheme() ?? systemPref());
+
+  const setTheme = (t) => {
+    setThemeRaw(t);
+    try {
+      if (t === "system") localStorage.removeItem("kibitz-theme");
+      else localStorage.setItem("kibitz-theme", t);
+    } catch {}
+  };
+
+  // Track system preference changes while the user is following system.
+  useEffect(() => {
+    if (readSavedTheme()) return; // user picked a side; ignore system
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setThemeRaw(mq.matches ? "dark" : "light");
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, [theme]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.theme = theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#0E0F10" : "#F6F4EF");
+  }, [theme]);
+
+  const value = useMemo(() => {
+    const k = kbzTokens(theme);
+    const saved = readSavedTheme();
+    return {
+      theme,
+      setTheme,
+      k,
+      // `mode` is what the user selected (light / dark / system); `theme` is
+      // what's actually applied right now.
+      mode: saved ?? "system",
+    };
+  }, [theme]);
+
+  return <KbzThemeContext.Provider value={value}>{children}</KbzThemeContext.Provider>;
+}
+
+export function useKbz() {
+  const ctx = useContext(KbzThemeContext);
+  if (ctx) return ctx;
+  // Fallback for unit tests / SSR — return a light snapshot.
+  return { theme: "light", mode: "system", setTheme: () => {}, k: tokens };
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Card — filled surface with a soft inset highlight. The whole layout uses
 // these as the primary container. Accent prop tints with the sage mint.
 export function Card({ children, style, pad = 16, onClick, lift = false, accent = false }) {
-  const k = tokens;
+  const { k } = useKbz();
   return (
     <div
       onClick={onClick}
@@ -43,7 +120,7 @@ export function Card({ children, style, pad = 16, onClick, lift = false, accent 
 // ────────────────────────────────────────────────────────────────────────────
 // Section header — small-caps label + optional action link on the right.
 export function Section({ label, action, onAction, children, style }) {
-  const k = tokens;
+  const { k } = useKbz();
   return (
     <div style={{ ...style }}>
       {label && (
@@ -92,7 +169,7 @@ export function Section({ label, action, onAction, children, style }) {
 // ────────────────────────────────────────────────────────────────────────────
 // Editorial display — Newsreader italic pull quote.
 export function Editorial({ children, size = 26, style }) {
-  const k = tokens;
+  const { k } = useKbz();
   return (
     <div
       style={{
@@ -115,7 +192,7 @@ export function Editorial({ children, size = 26, style }) {
 // ────────────────────────────────────────────────────────────────────────────
 // Classification — glyph + small-caps label, no pill.
 export function Classification({ kind, size = 13, weight = 600, style }) {
-  const k = tokens;
+  const { k } = useKbz();
   const c = CLASS_DEF[kind] ?? CLASS_DEF.good;
   return (
     <span
@@ -143,7 +220,7 @@ export function Classification({ kind, size = 13, weight = 600, style }) {
 // midline = white advantage), with optional vertical guide + dot for a
 // turning-point ply.
 export function Sparkline({ data, markIdx = -1, w = 320, h = 64, showAxis = true, color }) {
-  const k = tokens;
+  const { k } = useKbz();
   if (!data || data.length < 2) {
     return <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} />;
   }
@@ -198,7 +275,7 @@ export function Sparkline({ data, markIdx = -1, w = 320, h = 64, showAxis = true
 // ────────────────────────────────────────────────────────────────────────────
 // Small atoms used on the home screen and overview.
 export function OpponentDot({ result, size = 8 }) {
-  const k = tokens;
+  const { k } = useKbz();
   const c = result === "W" ? k.win : result === "L" ? k.loss : k.draw;
   return (
     <span
@@ -216,7 +293,7 @@ export function OpponentDot({ result, size = 8 }) {
 }
 
 export function MoveTag({ move, num, side = "w" }) {
-  const k = tokens;
+  const { k } = useKbz();
   return (
     <span style={{ fontFamily: k.font.mono, fontSize: 13, color: k.text, fontWeight: 500 }}>
       <span style={{ color: k.textDim, marginRight: 4 }}>
@@ -229,7 +306,7 @@ export function MoveTag({ move, num, side = "w" }) {
 }
 
 export function Stat({ label, value, sub, accent }) {
-  const k = tokens;
+  const { k } = useKbz();
   return (
     <div>
       <div
@@ -264,7 +341,7 @@ export function Stat({ label, value, sub, accent }) {
 // ────────────────────────────────────────────────────────────────────────────
 // NavBar — top of every screen. Left/right slots, optional subtitle.
 export function NavBar({ title, subtitle, left, right }) {
-  const k = tokens;
+  const { k } = useKbz();
   return (
     <div
       style={{
@@ -321,7 +398,7 @@ export function NavBar({ title, subtitle, left, right }) {
 // When `sticky` is true the composer floats above page content with a soft
 // gradient mask and an iOS-friendly safe-area inset.
 export function Composer({ value, onChange, onSend, placeholder, disabled, sticky = true }) {
-  const k = tokens;
+  const { k } = useKbz();
   return (
     <div
       style={{
@@ -442,7 +519,7 @@ export function ThemedBoard({
   analysisHref,
   hideLink = false,
 }) {
-  const k = tokens;
+  const { k } = useKbz();
   const board = parseFen(fen);
   const palette = k.board;
   return (
@@ -575,7 +652,7 @@ export function ThemedBoard({
 // Editorial-style eval bar — minimal: before label, slim bar, after label,
 // and a small swing readout coloured for the user's perspective.
 export function EvalBar({ before, after, perspective }) {
-  const k = tokens;
+  const { k } = useKbz();
   const fmt = (v) => v >= 99 ? "M" : v <= -99 ? "-M" : v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
   const toPercent = (v) => v >= 99 ? 95 : v <= -99 ? 5 : ((Math.max(-6, Math.min(6, v)) + 6) / 12) * 100;
   const pct = toPercent(after);
@@ -607,7 +684,7 @@ export function EvalBar({ before, after, perspective }) {
 // Shared by GameOverview (whole-game eval) and MoveAnalysisView (drill-in
 // swing visual). Both screens want the same affordances.
 export function HoverSparkline({ data, markIdx = -1, h = 64, onClickIdx, showAxis = true }) {
-  const k = tokens;
+  const { k } = useKbz();
   const ref = useRef(null);
   const [w, setW] = useState(360);
   const [hoverIdx, setHoverIdx] = useState(null);
@@ -694,6 +771,3 @@ export function HoverSparkline({ data, markIdx = -1, h = 64, onClickIdx, showAxi
     </div>
   );
 }
-
-// Re-export tokens so screens can pull them without re-importing design.js.
-export const k = tokens;

@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+:root[data-theme="light"] {
   --kbz-bg: #F6F4EF;
   --kbz-surface: #FFFFFF;
   --kbz-surface-2: #EFEDE6;
@@ -21,6 +22,44 @@
   --kbz-sans: "Geist", -apple-system, system-ui, sans-serif;
   --kbz-editorial: "Newsreader", "Geist", serif;
   --kbz-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+}
+
+:root[data-theme="dark"] {
+  --kbz-bg: #0E0F10;
+  --kbz-surface: #17181B;
+  --kbz-surface-2: #1F2024;
+  --kbz-surface-3: #26272C;
+  --kbz-text: #E8E7E3;
+  --kbz-text-mute: #9A9994;
+  --kbz-text-dim: #5F5E5A;
+  --kbz-hairline: rgba(255,255,255,0.07);
+  --kbz-accent: #7FD1A8;
+  --kbz-accent-dim: rgba(127,209,168,0.16);
+  --kbz-warn: #E8B14A;
+  --kbz-bad: #D77467;
+  --kbz-win: #7FD1A8;
+  --kbz-loss: #D77467;
+  --kbz-draw: #A8A39A;
+}
+
+/* Honour OS dark mode before JS runs — prevents a light flash on dark systems. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --kbz-bg: #0E0F10;
+    --kbz-surface: #17181B;
+    --kbz-surface-2: #1F2024;
+    --kbz-surface-3: #26272C;
+    --kbz-text: #E8E7E3;
+    --kbz-text-mute: #9A9994;
+    --kbz-text-dim: #5F5E5A;
+    --kbz-hairline: rgba(255,255,255,0.07);
+    --kbz-accent: #7FD1A8;
+    --kbz-accent-dim: rgba(127,209,168,0.16);
+    --kbz-warn: #E8B14A;
+    --kbz-bad: #D77467;
+    --kbz-win: #7FD1A8;
+    --kbz-loss: #D77467;
+  }
 }
 
 * {
