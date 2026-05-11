@@ -425,6 +425,9 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
 
   const moverIsWhite = plyIdx % 2 === 1;
   const sideLabel = moverIsWhite ? "White" : "Black";
+  // Half-move disambiguator: 9. for white's 9th, 9… for black's 9th.
+  // Mirrors standard chess notation so readers can tell the plies apart.
+  const moveNumLabel = `${Math.ceil(plyIdx / 2)}${moverIsWhite ? "." : "…"}`;
 
   return (
     <div
@@ -453,8 +456,8 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
             ‹
           </button>
         }
-        title={`Move ${Math.ceil(plyIdx / 2)} · ${sideLabel}`}
-        subtitle={isKeyMoment ? "The turning point" : moveLabel}
+        title={`${moveNumLabel} · ${sideLabel}`}
+        subtitle={isKeyMoment ? `${moveLabel} · the turning point` : moveLabel}
         right={
           gameSource(gameId) === "lichess" ? (
             <a
