@@ -397,12 +397,12 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
           <Chip classification={classification} small />
           {isKeyMoment && <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest shrink-0">key</span>}
         </div>
-        <div className="flex items-center gap-1 px-2 shrink-0">
+        <div className="flex items-center gap-0.5 px-2 shrink-0">
           <button onClick={() => setPlyIdx(p => Math.max(1, p - 1))} disabled={plyIdx <= 1}
-            className="px-2 py-2 text-zinc-500 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-default transition-colors text-base leading-none">‹</button>
-          <span className="text-[10px] text-zinc-600 tabular-nums w-12 text-center">{plyIdx} / {positions.length - 1}</span>
+            className="px-2.5 py-2 text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:cursor-default transition-colors text-lg font-light leading-none select-none">{"←"}</button>
+          <span className="text-[10px] text-zinc-500 tabular-nums w-14 text-center font-mono">{plyIdx} / {positions.length - 1}</span>
           <button onClick={() => setPlyIdx(p => Math.min(positions.length - 1, p + 1))} disabled={plyIdx >= positions.length - 1}
-            className="px-2 py-2 text-zinc-500 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-default transition-colors text-base leading-none">›</button>
+            className="px-2.5 py-2 text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:cursor-default transition-colors text-lg font-light leading-none select-none">{"→"}</button>
         </div>
       </div>
 
