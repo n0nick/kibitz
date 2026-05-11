@@ -9,7 +9,7 @@ import { runMigrations, evalsKey } from "./migrations";
 import { GameOverview } from "./GameOverview";
 import { MoveAnalysisView } from "./MoveAnalysisView";
 import { GameContext } from "./context";
-import { k, Card, Section, Editorial, NavBar, OpponentDot, Stat, ExtLinkIcon } from "./ui";
+import { k, Card, Section, Editorial, NavBar, Sparkline, OpponentDot, Stat, ExtLinkIcon } from "./ui";
 
 // ─── Demo game (Opera Game, 1858) ─────────────────────────────────────────────
 
