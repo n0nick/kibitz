@@ -12,6 +12,7 @@ export function mergeAnalysis(game, result) {
     if (!a) return m;
     return {
       ...m,
+      headline: a.headline ?? m.headline,
       card_teaser: a.card_teaser ?? m.card_teaser,
       explanation: a.explanation ?? m.explanation,
       betterMoves: a.betterMoves ?? m.betterMoves,

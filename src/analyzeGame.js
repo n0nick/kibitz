@@ -2,7 +2,11 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-export const PROMPT_VERSION = "v1.2";
+// v1.8 — perspective rule allows opponent color references again (user
+// stays strictly "you"), and reframes suggestedQuestion so it reads as
+// the user asking the coach in first person, never the coach quizzing
+// the user.
+export const PROMPT_VERSION = "v1.8";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -102,7 +106,18 @@ function perspectiveInstruction(perspective) {
   if (!perspective) return '';
   const you = perspective === 'white' ? 'White' : 'Black';
   const opp = perspective === 'white' ? 'Black' : 'White';
-  return `The user is playing the ${you} pieces. Address the user directly as "you" and their opponent as "your opponent" (or "${opp}" when piece color is needed for clarity). Frame eval swings from the user's perspective: when the eval moves in the user's favor, call it relief or opportunity; when against the user, frame it as a problem they face. Never use neutral commentator voice ("${you} played", "${you} needs to") for moves the user themselves made. When the opponent moves, say "your opponent played X" or "${opp} played X" — never "you played X" for opponent moves.`;
+  return `PERSPECTIVE — STRICT:
+
+The user plays the ${you} pieces. Reference the user as "you" / "your" — NEVER as "${you}". You may refer to the opponent as either "your opponent" or "${opp}" (the color is fine for the opponent; use whichever reads more naturally).
+
+Concrete substitutions:
+  ✗ "${you} played Nf3"            ✓ "You played Nf3"
+  ✗ "${you} now has a forced…"     ✓ "You now have a forced…"
+  ✗ "${you} ground out the endgame"   ✓ "You ground out the endgame"
+  ✓ "Your opponent missed mate" — fine
+  ✓ "${opp} missed mate" — also fine
+
+Frame eval swings from your perspective: when the eval moves in your favour, call it relief / opportunity; when against, frame it as a problem you face. Never narrate the user's own moves in third person.`;
 }
 
 // Formats one moment entry for the prompt, including engine alternatives and
@@ -211,15 +226,16 @@ ${momentsList}
 
 Return ONLY valid JSON, no markdown:
 {
-  "narrative": "2-3 sentences: how the game unfolded and what decided it",
-  "pattern": "1-2 sentences: a recurring theme or lesson",
+  "narrative": "ONE editorial sentence (≤45 words), TWO at most. Calm, present-tense pull-quote — name the key turn, not a move-by-move recap. Use inline emphasis markers (do NOT use any other markdown):\n    • ++text++  — positive emphasis: the user's strong/sharp/winning play (renders with a soft sage highlight)\n    • ~~text~~  — negative emphasis: the cost, the swing against the user, blunders (renders in alert color)\n    • (text)    — natural parens for parenthetical asides (rendered muted)\n    Example: 'You played the opening ++sharply++ and were on top through move 21. Then, with a quiet position (nine minutes on the clock), you traded bishop for knight on c3 — and gave up ~~five pawns of advantage~~ in a single move.'\n    NO [[annotations]] in the narrative; NO **bold** or *italic*; just plain prose with the three markers above.",
+  "pattern": "1-2 sentences: a recurring theme or lesson. Frame as a principle (eg. 'keep tension when ahead'), not as data the user can't verify (avoid stats like '73% accuracy' unless they're in the eval list).",
   "moments": [
     {
       "moveIdx": <number>,
-      "card_teaser": "ONE sentence, no annotations, plain everyday language: what happened at this moment and why it mattered",
-      "explanation": "1-2 sentences with [[square/piece/move]] annotations: what happened and why it matters",
+      "headline": "ONE editorial-style sentence, plain prose, no annotations, no SAN move names. Pull-quote voice naming the CONSEQUENCE — eg. 'You gave away the bishop pair — and a winning position — for one pawn and a check.' The reader has the board, the move, and the eval swing; the headline names the *stakes*.",
+      "card_teaser": "ONE plain-language sentence summarising what happened. No annotations. Used on list cards alongside the headline.",
+      "explanation": "2-3 short sentences explaining the MECHANISM on the board (what tactical/positional geometry was at play). Annotation-heavy: use [[square]], [[piece|square]], [[move|from-to]] to anchor every key square. MUST start as a self-contained sentence — never with a conjunction ('But', 'And', 'So', 'Yet', 'However') that depends on the headline above. Do NOT restate the swing, the classification, or the better-line move; the UI already shows those.",
       "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
-      "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up question>"
+      "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up. Phrase it as the USER asking the coach in first person — eg. 'Why was h5 worse than developing the knight?' or 'How should I have defended the king instead?' — NEVER as the coach quizzing the user (eg. don't say 'Why didn't you defend your king?')>"
     }
   ]
 }
@@ -227,6 +243,8 @@ Return ONLY valid JSON, no markdown:
 Rules:
 - ${betterMovesRule}${extraRules}
 - Output exactly the moveIdx values listed above, no more, no less
+- headline must NEVER contain [[annotations]], SAN move names, or eval numbers — it's a pull-quote${perspective ? `
+- PERSPECTIVE applies to every text field — narrative, pattern, headline, card_teaser, explanation, betterMoves[].reason. The user must always be "you" — never written as "${perspective === 'white' ? 'White' : 'Black'}". The opponent can be "your opponent" or "${perspective === 'white' ? 'Black' : 'White'}" (color is fine for the opponent only).` : ''}
 - card_teaser must be ONE sentence only, no [[annotation]] syntax, plain language a non-expert can read
 - ${ANNOTATION_RULES}`;
 }
@@ -273,13 +291,22 @@ export async function analyzeGameWithUsage(pgn, moments, summary, evals, apiKey,
   return { result: JSON.parse(repairJson(match[0])), usage, prompt };
 }
 
-export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone, engineData, perspective }, apiKey) {
+export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, fenBefore, fenAfter, mover, tone, engineData, perspective }, apiKey) {
   const fmt = (v) => (v >= 99 ? "M" : v <= -99 ? "-M" : v.toFixed(1));
   const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
 
+  // Disambiguate whose move this is so the engine alternatives below are
+  // never misinterpreted. `mover` is "white" | "black"; falls back to
+  // inferring from moveNumber ('9.' = white, '9...' = black).
+  const moverColor = mover ?? (moveNumber?.includes("...") ? "black" : "white");
+  const otherColor = moverColor === "white" ? "black" : "white";
+  const moverIsUser = perspective && perspective === moverColor;
+  const moverLabel = moverIsUser ? "you" : (perspective ? "your opponent" : moverColor);
+  const otherLabel = moverIsUser ? "your opponent" : (perspective ? "you" : otherColor);
+
   let engineSection = '';
   if (engineData?.top_alternatives?.length > 0) {
-    engineSection += '\nEngine alternatives (what to play instead):';
+    engineSection += `\nEngine alternatives — moves ${moverLabel} (${moverColor}) could have played INSTEAD of ${notation} (these apply to the position BEFORE the move):`;
     engineData.top_alternatives.forEach((alt, i) => {
       if (!alt.san) return;
       const ev = alt.mate != null ? (alt.mate > 0 ? '+M' : '-M') : fmtCp(alt.eval_cp);
@@ -288,7 +315,7 @@ export async function analyzeSinglePosition({ summary, moveNumber, notation, cla
     });
   }
   if (engineData?.refutation_pv?.length > 0) {
-    engineSection += `\nEngine continuation after ${notation}: ${engineData.refutation_pv.slice(0, 4).join(' ')}`;
+    engineSection += `\nEngine refutation — how ${otherLabel} (${otherColor}) punishes ${notation}: ${engineData.refutation_pv.slice(0, 4).join(' ')}`;
   }
 
   const perspLine = perspectiveInstruction(perspective);
@@ -297,16 +324,21 @@ export async function analyzeSinglePosition({ summary, moveNumber, notation, cla
     : (perspLine ? `${perspLine}\n\n` : '');
 
   const safetyRules = engineData ? `\nRules:
-- NEVER name a move anywhere in your response unless it appears verbatim in the engine alternatives or continuation provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
+- NEVER name a move anywhere in your response unless it appears verbatim in the engine alternatives or refutation provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
+- The engine alternatives are moves ${moverColor} could have played BEFORE ${notation}. Do not suggest these as moves for ${otherColor} to play now.
 - Do not make claims about tactical motifs (pins, forks, skewers, discovered attacks) unless the geometry is visible in the provided engine lines.` : '';
+
+  const movedBy = perspective
+    ? (moverIsUser ? `Move played by YOU (${moverColor}).` : `Move played by YOUR OPPONENT (${moverColor}).`)
+    : `Move played by ${moverColor}.`;
 
   const prompt = `${systemLine}Analyze this chess position in 2-3 sentences. Tone: ${toneDesc(tone)}
 
 Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown opening"})
-Move: ${moveNumber} ${notation} (${classification})
-Eval: ${fmt(evalBefore)} → ${fmt(evalAfter)}${fen ? `\nPosition (FEN): ${fen}` : ''}${engineSection}
+Move: ${moveNumber} ${notation} (${classification}) — ${movedBy}
+Eval: ${fmt(evalBefore)} → ${fmt(evalAfter)} (positive favours White)${fenBefore ? `\nPosition BEFORE the move (${moverColor} to move, alternatives below apply here): ${fenBefore}` : ''}${fenAfter ? `\nPosition AFTER the move (${otherColor} to move): ${fenAfter}` : fen ? `\nPosition (FEN): ${fen}` : ''}${engineSection}
 
-Focus on what's important about this position and what each player should consider.
+Focus on what ${moverLabel} could have played differently and why ${notation} was sub-optimal. Use the language of the perspective above.
 ${safetyRules}
 ${ANNOTATION_RULES}
 
@@ -338,7 +370,12 @@ ${tpSummary}
 ${evalSample}
 ${pgn ? `PGN:\n${pgn}` : ''}
 Tone: ${toneDesc(tone)}
-Be concise. Use markdown: **bold** for key points, *italic* for concepts.
+Reply in calm, editorial prose. Be concise. Use markdown structure where it helps:
+- **bold** for action verbs and key takeaways
+- *italics* for chess concepts
+- "### What you could have done" as a small section header when prescribing an alternative
+- bullet lists (\`- \`) for parallel reasons
+Keep the answer short — two short paragraphs at most.
 IMPORTANT: You have game-level context but not position-specific engine analysis for arbitrary positions. For strategic/narrative questions, answer from the context above. For specific tactical sequences not shown in the turning points, describe ideas in words rather than naming specific moves you cannot verify.`;
 
   const apiMessages = [
@@ -350,12 +387,28 @@ IMPORTANT: You have game-level context but not position-specific engine analysis
   return { text, systemPrompt: system };
 }
 
-export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine, perspective }, apiKey) {
+export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, fenBefore, fenAfter, engineLine, perspective }, apiKey) {
   const perspLine = perspectiveInstruction(perspective);
+  const moverColor = moment?.player ?? (moment?.moveNumber?.includes("...") ? "black" : "white");
+  const otherColor = moverColor === "white" ? "black" : "white";
+  const moverIsUser = perspective && perspective === moverColor;
+  const movedBy = perspective
+    ? (moverIsUser ? `played by YOU (${moverColor})` : `played by YOUR OPPONENT (${moverColor})`)
+    : `played by ${moverColor}`;
+  const fenLines = fenBefore || fenAfter
+    ? `\nPosition BEFORE this move (${moverColor} to move, engine alternatives below apply here): ${fenBefore ?? "(unavailable)"}\nPosition AFTER this move (${otherColor} to move): ${fenAfter ?? "(unavailable)"}`
+    : (fen ? `\nPosition (FEN): ${fen}` : "");
+
   const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown"}, ${summary.result}).${perspLine ? `\n${perspLine}` : ''}
-Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification})${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fen ? `\nPosition (FEN): ${fen}` : ""}${engineLine ? `\n${engineLine}` : ""}
+Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification}) — ${movedBy}.${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fenLines}${engineLine ? `\n${engineLine}` : ""}
 Tone: ${toneDesc(tone)}
-Be concise. Use markdown: **bold** for key points, *italic* for concepts. ${ANNOTATION_RULES}
+The engine alternatives, if shown, are moves ${moverColor} could have played INSTEAD of ${moment.notation}. They do NOT apply to the current position (where ${otherColor} is to move). Frame discussion of those alternatives as what ${moverIsUser ? "you" : "your opponent"} could have done differently.
+Reply in calm, editorial coach prose. Be concise — two short paragraphs at most. Use markdown to structure the answer:
+- **bold** for action verbs (**trade**, **defend**, **push**) and the key takeaway
+- *italics* for chess concepts (*initiative*, *bishop pair*)
+- "### What you should have done" as a small section header when prescribing an alternative
+- bullet lists (\`- \`) when listing parallel reasons
+Annotate squares and moves with the standard markup so they highlight on the board: ${ANNOTATION_RULES}
 IMPORTANT: Only claim a move gives check or captures a piece if it genuinely does so in the given FEN. When an engine line is provided, use it as ground truth for tactical calculation.`;
 
   const apiMessages = [
