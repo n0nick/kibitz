@@ -778,6 +778,7 @@ export default function App() {
     setImportError(null);
     setPerspective(null);
     setDrillInPly(null);
+    setOverviewCard(0);
     try {
       const cached = !force && getCachedPgn(id);
       let pgn;
@@ -820,6 +821,7 @@ export default function App() {
     setImportError(null);
     setPerspective(null);
     setDrillInPly(null);
+    setOverviewCard(0);
     try {
       const parsed = parseGame(pgn);
       const id = pgnGameId(pgn);
