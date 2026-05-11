@@ -814,7 +814,19 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
           </DrawerField>
 
           <div style={{ paddingTop: 12, borderTop: `1px solid ${k.hairline}`, marginTop: 8 }}>
-            <a href="https://github.com/n0nick/kibitz" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: k.textDim, textDecoration: "none" }}>
+            <a
+              href="https://github.com/n0nick/kibitz"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                color: k.textDim,
+                textDecoration: "none",
+              }}
+            >
               View on GitHub <ExtLinkIcon />
             </a>
           </div>
