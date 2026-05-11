@@ -2,11 +2,10 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-// v1.6 — labels fenBefore / fenAfter explicitly in single-move + chat
-// prompts, names the move's owner, and frames engine alternatives as
-// "what the mover could have played instead". Fixes a perspective bug
-// where the LLM was treating opponent-move alternatives as user options.
-export const PROMPT_VERSION = "v1.6";
+// v1.7 — hardens the perspective instruction with explicit
+// substitutions, and adds a per-field reminder so narrative / card_teaser /
+// headline never slip into "White played… / Black missed…" commentator voice.
+export const PROMPT_VERSION = "v1.7";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -106,7 +105,22 @@ function perspectiveInstruction(perspective) {
   if (!perspective) return '';
   const you = perspective === 'white' ? 'White' : 'Black';
   const opp = perspective === 'white' ? 'Black' : 'White';
-  return `The user is playing the ${you} pieces. Address the user directly as "you" and their opponent as "your opponent" (or "${opp}" when piece color is needed for clarity). Frame eval swings from the user's perspective: when the eval moves in the user's favor, call it relief or opportunity; when against the user, frame it as a problem they face. Never use neutral commentator voice ("${you} played", "${you} needs to") for moves the user themselves made. When the opponent moves, say "your opponent played X" or "${opp} played X" — never "you played X" for opponent moves.`;
+  return `PERSPECTIVE — STRICT:
+
+The user plays the ${you} pieces. Every player reference in your output MUST use one of:
+  • "you" / "your" — for the user (${you})
+  • "your opponent" — for the opponent (${opp})
+
+Do NOT use the color name ("${you}", "${opp}") to refer to a player. The color is only allowed for geometric/piece references where it's actually needed (e.g. "the ${you.toLowerCase()}-squared bishop", "a ${opp.toLowerCase()} pawn on f5").
+
+Concrete substitutions:
+  ✗ "${you} played Nf3"            ✓ "You played Nf3"
+  ✗ "${opp} missed mate"           ✓ "Your opponent missed mate"
+  ✗ "${you} now has a forced…"     ✓ "You now have a forced…"
+  ✗ "${opp} blunders the queen"    ✓ "Your opponent blunders the queen"
+  ✗ "${you} ground out the endgame"   ✓ "You ground out the endgame"
+
+Frame eval swings from your perspective: when the eval moves in your favour, call it relief / opportunity; when against, frame it as a problem you face. Never narrate in neutral commentator voice.`;
 }
 
 // Formats one moment entry for the prompt, including engine alternatives and
@@ -232,7 +246,8 @@ Return ONLY valid JSON, no markdown:
 Rules:
 - ${betterMovesRule}${extraRules}
 - Output exactly the moveIdx values listed above, no more, no less
-- headline must NEVER contain [[annotations]], SAN move names, or eval numbers — it's a pull-quote
+- headline must NEVER contain [[annotations]], SAN move names, or eval numbers — it's a pull-quote${perspective ? `
+- PERSPECTIVE applies to every text field — narrative, pattern, headline, card_teaser, explanation, betterMoves[].reason. Use "you" / "your opponent" exclusively. Do NOT write "${perspective === 'white' ? 'White' : 'Black'} played…" or "${perspective === 'white' ? 'Black' : 'White'} now has…" anywhere.` : ''}
 - card_teaser must be ONE sentence only, no [[annotation]] syntax, plain language a non-expert can read
 - ${ANNOTATION_RULES}`;
 }
