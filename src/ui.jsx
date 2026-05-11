@@ -830,6 +830,134 @@ export function Annotated({
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Drawer — iOS-style bottom sheet with backdrop + grab handle. Closes via
+// backdrop tap, the × button, or onClose.
+
+export function Drawer({ children, onClose, title, subtitle }) {
+  const { k } = useKbz();
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+          backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+          zIndex: 40,
+        }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: "fixed", left: 0, right: 0, bottom: 0,
+          maxHeight: "85vh", overflowY: "auto",
+          background: k.surface, color: k.text,
+          borderTopLeftRadius: 22, borderTopRightRadius: 22,
+          boxShadow: "0 -8px 32px rgba(0,0,0,0.45)",
+          padding: "10px 18px 28px",
+          fontFamily: k.font.sans,
+          zIndex: 41,
+          maxWidth: 540,
+          margin: "0 auto",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "center", padding: "6px 0 10px" }}>
+          <span style={{ width: 42, height: 4, borderRadius: 2, background: k.surface3 }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 600 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 12, color: k.textMute, marginTop: 2 }}>{subtitle}</div>}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{ background: "transparent", border: "none", color: k.textMute, fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 4 }}
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </div>
+    </>
+  );
+}
+
+// Caps-label + optional accent hint row above a drawer field's input.
+export function DrawerField({ label, hint, children }) {
+  const { k } = useKbz();
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <label className="kbz-caps">{label}</label>
+        {hint && <span style={{ fontSize: 10, color: k.accent, fontWeight: 600 }}>{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Single-line input + optional toggle button to the right (used for the
+// password/show-or-hide combo on the credential fields).
+export function DrawerInputRow({ type, value, onChange, onBlur, onEnter, placeholder, monospace, toggleLabel, onToggle }) {
+  const { k } = useKbz();
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        onKeyDown={(e) => e.key === "Enter" && onEnter?.()}
+        placeholder={placeholder}
+        style={{
+          flex: 1, minWidth: 0,
+          background: k.surface2, color: k.text,
+          border: `1px solid ${k.hairline}`,
+          borderRadius: 10,
+          padding: "10px 12px",
+          fontFamily: monospace ? k.font.mono : k.font.sans,
+          fontSize: 14,
+          outline: "none",
+        }}
+      />
+      {onToggle && (
+        <button
+          onClick={onToggle}
+          style={{
+            padding: "0 12px",
+            background: k.surface2, color: k.textMute,
+            border: `1px solid ${k.hairline}`, borderRadius: 10,
+            fontSize: 12, cursor: "pointer",
+            fontFamily: k.font.sans,
+          }}
+        >
+          {toggleLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Pulsing placeholder bar used while LLM-generated content is loading.
+// Width is a CSS length (px / %) — defaults to 100% of the parent.
+export function Skeleton({ w = "100%", h = 14, style }) {
+  const { k } = useKbz();
+  return (
+    <div
+      style={{
+        width: w,
+        height: h,
+        background: k.surface2,
+        borderRadius: 4,
+        animation: "kbz-pulse 1.4s ease-in-out infinite",
+        ...style,
+      }}
+    />
+  );
+}
+
 export function HoverSparkline({ data, markIdx = -1, h = 64, onClickIdx, showAxis = true }) {
   const { k } = useKbz();
   const ref = useRef(null);
