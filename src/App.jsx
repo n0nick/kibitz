@@ -1859,12 +1859,18 @@ export default function App() {
         setGameData(gameWithMeta);
         setGameId(id);
         setScreen("overview");
+        window.history.replaceState(null, "", `?game=${id}`);
         setAnalysisStatus("awaiting-evals");
         return;
       }
       setGameData(gameWithMeta);
       setGameId(id);
-      if (initialPly !== null) setDrillInPly(initialPly);
+      if (initialPly !== null) {
+        setDrillInPly(initialPly);
+        window.history.replaceState(null, "", `?game=${id}&move=${initialPly}`);
+      } else {
+        window.history.replaceState(null, "", `?game=${id}`);
+      }
       setScreen(resolveScreen(initialPly, view));
       if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force);
     } catch (e) {
@@ -1885,7 +1891,12 @@ export default function App() {
       addToHistory({ id, source: "pgn", white: parsed.summary.white, black: parsed.summary.black, result: parsed.summary.result });
       setGameData({ ...parsed, pgn, gameId: id });
       setGameId(id);
-      if (initialPly !== null) setDrillInPly(initialPly);
+      if (initialPly !== null) {
+        setDrillInPly(initialPly);
+        window.history.replaceState(null, "", `?game=${id}&move=${initialPly}`);
+      } else {
+        window.history.replaceState(null, "", `?game=${id}`);
+      }
       if (!parsed.hasEvals) {
         setScreen("overview");
         setAnalysisStatus("awaiting-evals");

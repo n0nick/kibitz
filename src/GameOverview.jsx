@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { chatAboutGame, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
+import { chatAboutGame, selectMoments, MAX_OVERVIEW_MOMENTS, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
 import { FlagButton } from "./FlagButton";
 import { Board, EvalBar, Chip, CLS } from "./MoveAnalysisView";
 
@@ -234,7 +234,9 @@ export function GameOverview({
   game, gameId, perspective, onPerspectiveSet, onReset, onDrillIn, onStartReview,
   apiKey, tone, analysisStatus, localProgress, startLocalAnalysis,
 }) {
-  const { positions, evals, moments, summary, pgn, promptSentToLlm } = game;
+  const { positions, evals, summary, pgn, promptSentToLlm } = game;
+  // Cap to MAX_OVERVIEW_MOMENTS (5), proportionally distributed across game thirds
+  const moments = selectMoments(game.moments, evals, MAX_OVERVIEW_MOMENTS);
   const [activeCard, setActiveCard] = useState(0);
   const [gameChatHistory, setGameChatHistory] = useState([]);
   const [gameChatInput, setGameChatInput] = useState('');

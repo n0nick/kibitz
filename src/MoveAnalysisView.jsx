@@ -377,29 +377,33 @@ export function MoveAnalysisView({ plyIdx, gameId, apiKey, tone, perspective, on
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Board */}
-        <div className="px-4 pt-5 pb-3">
-          <Board
-            fen={currentPos.fen}
-            fromSq={currentPos.from}
-            toSq={currentPos.to}
-            altFromSq={altHighlight?.from}
-            altToSq={altHighlight?.to}
-            hoverFromSq={hoverHighlight?.from}
-            hoverToSq={hoverHighlight?.to}
-            flip={flip}
-            analysisHref={gameSource(gameId) === "lichess" ? `https://lichess.org/${gameId}#${plyIdx}` : undefined}
-          />
+      <div className="flex-1 overflow-y-auto md:overflow-hidden md:flex">
+        {/* Left panel: board + eval bar */}
+        <div className="md:w-[420px] md:shrink-0 md:border-r md:border-zinc-800 md:overflow-y-auto">
+          <div className="px-4 pt-5 pb-3">
+            <Board
+              fen={currentPos.fen}
+              fromSq={currentPos.from}
+              toSq={currentPos.to}
+              altFromSq={altHighlight?.from}
+              altToSq={altHighlight?.to}
+              hoverFromSq={hoverHighlight?.from}
+              hoverToSq={hoverHighlight?.to}
+              flip={flip}
+              analysisHref={gameSource(gameId) === "lichess" ? `https://lichess.org/${gameId}#${plyIdx}` : undefined}
+            />
+          </div>
+          <div className="px-4 pb-4">
+            <EvalBar before={evals[plyIdx - 1] ?? 0} after={evals[plyIdx]} />
+          </div>
         </div>
 
-        {/* Eval bar */}
-        <div className="px-4 pb-4">
-          <EvalBar before={evals[plyIdx - 1] ?? 0} after={evals[plyIdx]} />
-        </div>
+        {/* Right panel: commentary + chat */}
+        <div className="md:flex-1 md:overflow-y-auto">
+        <div className="max-w-2xl mx-auto md:py-6 md:px-4">
 
         {/* Commentary card */}
-        <div className="mx-4 mb-4 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
+        <div className="mx-4 mb-4 md:mx-0 rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
           <div className="px-4 py-4">
             {explanation ? (
               <div>
@@ -471,7 +475,7 @@ export function MoveAnalysisView({ plyIdx, gameId, apiKey, tone, perspective, on
         </div>
 
         {/* Chat */}
-        <div className="mx-4 mb-8">
+        <div className="mx-4 mb-8 md:mx-0">
           {/* Suggested question chip */}
           {chatHistory.length === 0 && !chatSending && suggestedQ && (
             <button
@@ -529,7 +533,10 @@ export function MoveAnalysisView({ plyIdx, gameId, apiKey, tone, perspective, on
             <p className="text-xs text-zinc-600 mt-2 text-center">Add an API key on the import screen to enable chat.</p>
           )}
         </div>
-      </div>
+
+        </div>{/* max-w-2xl */}
+        </div>{/* right panel */}
+      </div>{/* body flex */}
     </div>
   );
 }

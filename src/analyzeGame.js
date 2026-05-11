@@ -139,10 +139,11 @@ export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = []) 
 }
 
 export const MAX_MOMENTS = 12;
+export const MAX_OVERVIEW_MOMENTS = 5;
 
-export function selectMoments(moments, evals) {
-  if (moments.length <= MAX_MOMENTS) return [...moments].sort((a, b) => a.moveIdx - b.moveIdx);
-  // Proportional sampling across game thirds for extreme outliers
+export function selectMoments(moments, evals, max = MAX_MOMENTS) {
+  if (moments.length <= max) return [...moments].sort((a, b) => a.moveIdx - b.moveIdx);
+  // Proportional sampling across game thirds to cover opening/middlegame/endgame
   const totalMoves = evals.length - 1;
   const swing = (m) => Math.abs((evals[m.moveIdx] ?? 0) - (evals[m.moveIdx - 1] ?? 0));
   const bySwing = (arr) => [...arr].sort((a, b) => swing(b) - swing(a));
@@ -152,11 +153,11 @@ export function selectMoments(moments, evals) {
     bySwing(moments.filter((m) => m.moveIdx > third && m.moveIdx <= 2 * third)),
     bySwing(moments.filter((m) => m.moveIdx > 2 * third)),
   ];
-  const perSection = Math.ceil(MAX_MOMENTS / 3);
+  const perSection = Math.ceil(max / 3);
   const selected = new Set(sections.flatMap((s) => s.slice(0, perSection)));
-  if (selected.size < MAX_MOMENTS) {
+  if (selected.size < max) {
     bySwing(moments.filter((m) => !selected.has(m)))
-      .slice(0, MAX_MOMENTS - selected.size)
+      .slice(0, max - selected.size)
       .forEach((m) => selected.add(m));
   }
   return [...selected].sort((a, b) => a.moveIdx - b.moveIdx);
