@@ -2,10 +2,11 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-// v1.5 — sharpens the headline-vs-explanation split (headline = consequence,
-// explanation = on-board mechanism) and forbids the explanation from
-// starting with a conjunction that depends on the headline above.
-export const PROMPT_VERSION = "v1.5";
+// v1.6 — labels fenBefore / fenAfter explicitly in single-move + chat
+// prompts, names the move's owner, and frames engine alternatives as
+// "what the mover could have played instead". Fixes a perspective bug
+// where the LLM was treating opponent-move alternatives as user options.
+export const PROMPT_VERSION = "v1.6";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -278,13 +279,22 @@ export async function analyzeGameWithUsage(pgn, moments, summary, evals, apiKey,
   return { result: JSON.parse(repairJson(match[0])), usage, prompt };
 }
 
-export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone, engineData, perspective }, apiKey) {
+export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, fenBefore, fenAfter, mover, tone, engineData, perspective }, apiKey) {
   const fmt = (v) => (v >= 99 ? "M" : v <= -99 ? "-M" : v.toFixed(1));
   const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
 
+  // Disambiguate whose move this is so the engine alternatives below are
+  // never misinterpreted. `mover` is "white" | "black"; falls back to
+  // inferring from moveNumber ('9.' = white, '9...' = black).
+  const moverColor = mover ?? (moveNumber?.includes("...") ? "black" : "white");
+  const otherColor = moverColor === "white" ? "black" : "white";
+  const moverIsUser = perspective && perspective === moverColor;
+  const moverLabel = moverIsUser ? "you" : (perspective ? "your opponent" : moverColor);
+  const otherLabel = moverIsUser ? "your opponent" : (perspective ? "you" : otherColor);
+
   let engineSection = '';
   if (engineData?.top_alternatives?.length > 0) {
-    engineSection += '\nEngine alternatives (what to play instead):';
+    engineSection += `\nEngine alternatives — moves ${moverLabel} (${moverColor}) could have played INSTEAD of ${notation} (these apply to the position BEFORE the move):`;
     engineData.top_alternatives.forEach((alt, i) => {
       if (!alt.san) return;
       const ev = alt.mate != null ? (alt.mate > 0 ? '+M' : '-M') : fmtCp(alt.eval_cp);
@@ -293,7 +303,7 @@ export async function analyzeSinglePosition({ summary, moveNumber, notation, cla
     });
   }
   if (engineData?.refutation_pv?.length > 0) {
-    engineSection += `\nEngine continuation after ${notation}: ${engineData.refutation_pv.slice(0, 4).join(' ')}`;
+    engineSection += `\nEngine refutation — how ${otherLabel} (${otherColor}) punishes ${notation}: ${engineData.refutation_pv.slice(0, 4).join(' ')}`;
   }
 
   const perspLine = perspectiveInstruction(perspective);
@@ -302,16 +312,21 @@ export async function analyzeSinglePosition({ summary, moveNumber, notation, cla
     : (perspLine ? `${perspLine}\n\n` : '');
 
   const safetyRules = engineData ? `\nRules:
-- NEVER name a move anywhere in your response unless it appears verbatim in the engine alternatives or continuation provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
+- NEVER name a move anywhere in your response unless it appears verbatim in the engine alternatives or refutation provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
+- The engine alternatives are moves ${moverColor} could have played BEFORE ${notation}. Do not suggest these as moves for ${otherColor} to play now.
 - Do not make claims about tactical motifs (pins, forks, skewers, discovered attacks) unless the geometry is visible in the provided engine lines.` : '';
+
+  const movedBy = perspective
+    ? (moverIsUser ? `Move played by YOU (${moverColor}).` : `Move played by YOUR OPPONENT (${moverColor}).`)
+    : `Move played by ${moverColor}.`;
 
   const prompt = `${systemLine}Analyze this chess position in 2-3 sentences. Tone: ${toneDesc(tone)}
 
 Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown opening"})
-Move: ${moveNumber} ${notation} (${classification})
-Eval: ${fmt(evalBefore)} → ${fmt(evalAfter)}${fen ? `\nPosition (FEN): ${fen}` : ''}${engineSection}
+Move: ${moveNumber} ${notation} (${classification}) — ${movedBy}
+Eval: ${fmt(evalBefore)} → ${fmt(evalAfter)} (positive favours White)${fenBefore ? `\nPosition BEFORE the move (${moverColor} to move, alternatives below apply here): ${fenBefore}` : ''}${fenAfter ? `\nPosition AFTER the move (${otherColor} to move): ${fenAfter}` : fen ? `\nPosition (FEN): ${fen}` : ''}${engineSection}
 
-Focus on what's important about this position and what each player should consider.
+Focus on what ${moverLabel} could have played differently and why ${notation} was sub-optimal. Use the language of the perspective above.
 ${safetyRules}
 ${ANNOTATION_RULES}
 
@@ -360,11 +375,22 @@ IMPORTANT: You have game-level context but not position-specific engine analysis
   return { text, systemPrompt: system };
 }
 
-export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine, perspective }, apiKey) {
+export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, fenBefore, fenAfter, engineLine, perspective }, apiKey) {
   const perspLine = perspectiveInstruction(perspective);
+  const moverColor = moment?.player ?? (moment?.moveNumber?.includes("...") ? "black" : "white");
+  const otherColor = moverColor === "white" ? "black" : "white";
+  const moverIsUser = perspective && perspective === moverColor;
+  const movedBy = perspective
+    ? (moverIsUser ? `played by YOU (${moverColor})` : `played by YOUR OPPONENT (${moverColor})`)
+    : `played by ${moverColor}`;
+  const fenLines = fenBefore || fenAfter
+    ? `\nPosition BEFORE this move (${moverColor} to move, engine alternatives below apply here): ${fenBefore ?? "(unavailable)"}\nPosition AFTER this move (${otherColor} to move): ${fenAfter ?? "(unavailable)"}`
+    : (fen ? `\nPosition (FEN): ${fen}` : "");
+
   const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown"}, ${summary.result}).${perspLine ? `\n${perspLine}` : ''}
-Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification})${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fen ? `\nPosition (FEN): ${fen}` : ""}${engineLine ? `\n${engineLine}` : ""}
+Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification}) — ${movedBy}.${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fenLines}${engineLine ? `\n${engineLine}` : ""}
 Tone: ${toneDesc(tone)}
+The engine alternatives, if shown, are moves ${moverColor} could have played INSTEAD of ${moment.notation}. They do NOT apply to the current position (where ${otherColor} is to move). Frame discussion of those alternatives as what ${moverIsUser ? "you" : "your opponent"} could have done differently.
 Reply in calm, editorial coach prose. Be concise — two short paragraphs at most. Use markdown to structure the answer:
 - **bold** for action verbs (**trade**, **defend**, **push**) and the key takeaway
 - *italics* for chess concepts (*initiative*, *bishop pair*)

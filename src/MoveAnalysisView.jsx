@@ -339,11 +339,13 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
       ).catch(() => null);
       if (engData && !perMoveEngData) setPerMoveEngData(engData);
 
+      const moverColor = plyIdx % 2 === 1 ? "white" : "black";
       if (currentMoment) {
         const { text, prompt } = await analyzeSinglePosition({
           summary, moveNumber: currentMoment.moveNumber, notation: currentMoment.notation,
           classification: currentMoment.classification, evalBefore: evals[plyIdx - 1] ?? 0,
-          evalAfter: evals[plyIdx], fen: fenAfter, tone, engineData: engData, perspective,
+          evalAfter: evals[plyIdx], fenBefore, fenAfter, mover: currentMoment.player ?? moverColor,
+          tone, engineData: engData, perspective,
         }, apiKey);
         onPatchMoment?.(currentMoment.id, text, prompt);
       } else {
@@ -351,7 +353,8 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
         const { text, prompt } = await analyzeSinglePosition({
           summary, moveNumber: mn, notation: currentPos.san, classification: "good",
           evalBefore: evals[plyIdx - 1] ?? 0, evalAfter: evals[plyIdx],
-          fen: fenAfter, tone, engineData: engData, perspective,
+          fenBefore, fenAfter, mover: moverColor,
+          tone, engineData: engData, perspective,
         }, apiKey);
         setAnalysisText(text);
         setAnalysisPrompt(prompt);
@@ -382,25 +385,30 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
         if (engData) setRichEngData(engData);
       }
       const fmtCp = (cp) => cp == null ? "?" : `${cp >= 0 ? "+" : ""}${(cp / 100).toFixed(1)}`;
+      const moverColorForLine = plyIdx % 2 === 1 ? "white" : "black";
+      const playedSan = currentMoment?.notation ?? currentPos.san;
       const engineLine = engData?.top_alternatives?.length
-        ? `Top ${engData.top_alternatives.length} engine moves at this position:\n` +
+        ? `Engine alternatives — moves ${moverColorForLine} could have played INSTEAD of ${playedSan} (these apply to the position BEFORE the move, where ${moverColorForLine} was to move):\n` +
           engData.top_alternatives.map((alt, i) => {
             const ev = alt.mate != null ? (alt.mate > 0 ? "+M" : "-M") : fmtCp(alt.eval_cp);
             const cont = alt.pv_san?.slice(1, 4).join(" ");
             return `  ${i + 1}. ${alt.san} (${ev})${cont ? ` — continuation: ${cont}` : ""}`;
           }).join("\n") +
-          `\nSystem prompt for chat: You have engine evaluations for the top ${engData.top_alternatives.length} candidate moves at this position. If the user asks about a move not in this list, acknowledge that you don't have engine-verified analysis for that move and respond cautiously based on general principles. Do not invent tactical sequences.`
+          `\nIf the user asks about a move not in this list, acknowledge that you don't have engine-verified analysis for it and respond cautiously based on general principles. Do not invent tactical sequences. These engine moves are NOT options for the side currently to move — they are alternatives the side that just moved could have chosen.`
         : null;
 
+      const moverColor = plyIdx % 2 === 1 ? "white" : "black";
       const moment = currentMoment ?? {
         id: `pos-${plyIdx}`, moveIdx: plyIdx,
         moveNumber: `${Math.ceil(plyIdx / 2)}${plyIdx % 2 === 1 ? "." : "..."}`,
         notation: currentPos.san, classification: "good",
+        player: moverColor,
         explanation: analysisText ?? null, qa: null,
       };
 
       const { text: answer, systemPrompt } = await chatAboutPosition(
-        { summary, moment, messages: currentMsgs, question: q, tone, fen: fenCurrent, engineLine, perspective },
+        { summary, moment, messages: currentMsgs, question: q, tone,
+          fen: fenCurrent, fenBefore, fenAfter, engineLine, perspective },
         apiKey
       );
       setChatHistory((prev) => [...prev, { role: "assistant", text: answer, systemPrompt }]);
@@ -473,7 +481,17 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
       />
 
       <div style={{ maxWidth: 540, margin: "0 auto" }}>
-        {/* Per-ply navigation */}
+        {/* Playing-as indicator + per-ply navigation */}
+        {perspective && (
+          <div style={{
+            padding: "0 22px 6px",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            fontSize: 11, color: k.accent, fontWeight: 600,
+          }}>
+            <span style={{ fontSize: 13, lineHeight: 1 }}>{perspective === "white" ? "♔" : "♚"}</span>
+            <span>Playing as {perspective === "white" ? "White" : "Black"}</span>
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "0 18px 8px" }}>
           <button
             onClick={() => setPlyIdx((p) => Math.max(1, p - 1))}

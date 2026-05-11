@@ -320,6 +320,18 @@ export function GameOverview({
               : analysisStatus === "error" ? "Analysis failed — check API key"
               : "Computer-analysed · Stockfish"}
           </span>
+          {perspective && (
+            <>
+              <span style={{ color: k.textDim }}>·</span>
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                color: k.accent, fontWeight: 600,
+              }}>
+                <span style={{ fontSize: 13, lineHeight: 1 }}>{perspective === "white" ? "♔" : "♚"}</span>
+                Playing as {perspective === "white" ? "White" : "Black"}
+              </span>
+            </>
+          )}
           <span style={{ flex: 1 }} />
           {analysisStatus === "awaiting-evals" ? (
             <button
