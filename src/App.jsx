@@ -741,18 +741,21 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
           title={firstRun ? "Welcome to Kibitz" : "Settings"}
           subtitle={
             firstRun
-              ? "Add an Anthropic key for coaching, and connect Lichess to pull your games."
+              ? null
               : lichessUser
               ? `Connected as ${lichessUser}`
               : "Not connected"
           }
         >
           {firstRun && (
-            <div style={{ marginBottom: 18 }}>
-              <Editorial size={20} style={{ lineHeight: 1.3 }}>
+            <div style={{ marginBottom: 20 }}>
+              <Editorial size={22} style={{ lineHeight: 1.25, marginBottom: 12 }}>
                 Every game has a moment.<br />
                 <span style={{ color: k.accent }}>Let's find yours.</span>
               </Editorial>
+              <div style={{ fontSize: 13, color: k.textMute, lineHeight: 1.5 }}>
+                Add an Anthropic API key for coaching, and connect Lichess to pull your games.
+              </div>
             </div>
           )}
 
