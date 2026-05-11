@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { marked } from 'marked';
+import { k } from './ui';
 
 const ICON_COPY = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const ICON_CHECK = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -45,28 +46,50 @@ export default function ReportViewer() {
   }, [html]);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 max-w-3xl mx-auto">
-      <div className="mb-6 flex items-center gap-3">
-        <a href="/" className="text-zinc-500 hover:text-zinc-300 text-sm transition-colors">← Kibitz</a>
-        <span className="text-zinc-700">|</span>
-        <span className="text-zinc-400 text-sm">Bug report</span>
+    <div style={{
+      minHeight: "100vh",
+      background: k.bg,
+      color: k.text,
+      fontFamily: k.font.sans,
+      padding: 24,
+    }}>
+      <div style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ marginBottom: 22, display: "flex", alignItems: "center", gap: 12 }}>
+          <a
+            href="/"
+            style={{
+              color: k.textMute, fontSize: 13, textDecoration: "none",
+            }}
+          >
+            ← Kibitz
+          </a>
+          <span style={{ color: k.textDim }}>|</span>
+          <span className="kbz-caps" style={{ fontSize: 11 }}>Bug report</span>
+        </div>
+
+        {error && (
+          <div style={{ color: k.bad, fontSize: 13 }}>{error}</div>
+        )}
+
+        {!html && !error && (
+          <div style={{ color: k.textMute, fontSize: 13, animation: "kbz-pulse 1.4s ease-in-out infinite" }}>
+            Loading report…
+          </div>
+        )}
+
+        {html && (
+          <div
+            ref={bodyRef}
+            className="report-body"
+            style={{
+              fontSize: 14,
+              color: k.text,
+              lineHeight: 1.65,
+            }}
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        )}
       </div>
-
-      {error && (
-        <div className="text-red-400 text-sm">{error}</div>
-      )}
-
-      {!html && !error && (
-        <div className="text-zinc-500 text-sm animate-pulse">Loading report…</div>
-      )}
-
-      {html && (
-        <div
-          ref={bodyRef}
-          className="report-body text-sm text-zinc-200 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      )}
     </div>
   );
 }
