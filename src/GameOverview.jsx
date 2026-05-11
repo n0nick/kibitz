@@ -310,7 +310,7 @@ export function GameOverview({
               ))}
             </div>
             {activeCard === 0 && (
-              <span className="text-[9px] text-zinc-600 tracking-wide">swipe to explore →</span>
+              <span className="text-[9px] text-zinc-400 tracking-wide">swipe to explore →</span>
             )}
           </div>
         </div>
