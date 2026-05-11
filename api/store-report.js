@@ -33,15 +33,15 @@ function renderReport(ctx) {
   }
 
   lines.push('\n### LLM response that was flagged');
-  lines.push((ctx.commentary ?? '').split('\n').map(l => `> ${l}`).join('\n'));
+  lines.push(`\`\`\`\n${ctx.commentary ?? ''}\n\`\`\``);
 
   if (ctx.fenBefore) {
     lines.push('\n### Position before the move (FEN)');
-    lines.push(`\`${ctx.fenBefore}\``);
+    lines.push(`\`\`\`\n${ctx.fenBefore}\n\`\`\``);
   }
   if (ctx.fenAfter) {
     lines.push('\n### Position after the move (FEN)');
-    lines.push(`\`${ctx.fenAfter}\``);
+    lines.push(`\`\`\`\n${ctx.fenAfter}\n\`\`\``);
   }
 
   const eng = ctx.engineData;
