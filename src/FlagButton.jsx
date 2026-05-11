@@ -58,6 +58,7 @@ export function FlagButton({ context }) {
     setStatus('idle');
 
     const ctx = { ...context, generatedAt: new Date().toISOString() };
+    console.log('[FlagButton] report payload', ctx);
 
     // Open the tab immediately (synchronous, in the user gesture) so popup
     // blockers don't fire. We navigate it once the report URL is ready.
