@@ -351,12 +351,29 @@ export function GameOverview({
             }}>
               <span className="kbz-caps" style={{ fontSize: 10 }}>Eval · whole game</span>
               {turningIdx >= 0 && moments[0] && (
-                <span style={{ fontSize: 10, color: k.warn, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600 }}>
-                  turn at move {Math.ceil(turningIdx / 2)}
-                </span>
+                <button
+                  onClick={() => onDrillIn(turningIdx)}
+                  style={{
+                    fontSize: 10,
+                    color: k.warn,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.6,
+                    fontWeight: 600,
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    fontFamily: k.font.sans,
+                    textDecoration: "underline",
+                    textUnderlineOffset: 3,
+                    textDecorationColor: `${k.warn}66`,
+                  }}
+                >
+                  turn at move {Math.ceil(turningIdx / 2)} ›
+                </button>
               )}
             </div>
-            <SparklineFit data={evals} markIdx={turningIdx} h={68} />
+            <SparklineFit data={evals} markIdx={turningIdx} h={68} onClickIdx={onDrillIn} />
           </div>
         )}
 
@@ -505,7 +522,7 @@ export function GameOverview({
 
 // Wrapper that measures container width, feeds it to the sparkline, and
 // tracks pointer position to show the eval value + ply at the cursor.
-function SparklineFit({ data, markIdx, h }) {
+function SparklineFit({ data, markIdx, h, onClickIdx }) {
   const ref = useRef(null);
   const [w, setW] = useState(360);
   const [hoverIdx, setHoverIdx] = useState(null);
@@ -519,15 +536,20 @@ function SparklineFit({ data, markIdx, h }) {
     return () => ro.disconnect();
   }, []);
 
-  const onMove = (e) => {
-    if (!ref.current || !data || data.length < 2) return;
+  const idxFromEvent = (e) => {
+    if (!ref.current || !data || data.length < 2) return null;
     const rect = ref.current.getBoundingClientRect();
-    const cx = (e.touches?.[0]?.clientX ?? e.clientX) - rect.left;
+    const cx = (e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX) - rect.left;
     const rel = Math.max(0, Math.min(1, cx / Math.max(1, rect.width)));
-    const idx = Math.round(rel * (data.length - 1));
-    setHoverIdx(idx);
+    return Math.round(rel * (data.length - 1));
   };
+  const onMove = (e) => { const idx = idxFromEvent(e); if (idx != null) setHoverIdx(idx); };
   const onLeave = () => setHoverIdx(null);
+  const onClick = (e) => {
+    if (!onClickIdx) return;
+    const idx = idxFromEvent(e);
+    if (idx != null && idx > 0) onClickIdx(idx);
+  };
 
   const displayIdx = hoverIdx ?? markIdx;
   const displayEv = displayIdx != null && displayIdx >= 0 && displayIdx < data.length ? data[displayIdx] : null;
@@ -575,8 +597,10 @@ function SparklineFit({ data, markIdx, h }) {
         onMouseLeave={onLeave}
         onTouchStart={onMove}
         onTouchMove={onMove}
-        onTouchEnd={onLeave}
-        style={{ cursor: "crosshair", touchAction: "none" }}
+        onTouchEnd={(e) => { onClick(e); onLeave(); }}
+        onClick={onClick}
+        style={{ cursor: onClickIdx ? "pointer" : "crosshair", touchAction: "none" }}
+        title={onClickIdx ? "Tap to drill into this ply" : undefined}
       >
         <Sparkline data={data} markIdx={hoverIdx ?? markIdx} w={w} h={h} />
       </div>

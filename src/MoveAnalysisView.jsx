@@ -154,6 +154,17 @@ function firstSentence(text) {
   return (m ? m[0] : stripped).trim();
 }
 
+// Belt-and-braces guard: occasionally the model starts the explanation with a
+// conjunction that flows from the headline above ("But Black had already…").
+// Read in isolation that's jarring — capitalise the next clause instead.
+function deconjunct(text) {
+  if (!text) return text;
+  return text.replace(
+    /^(\s*)(but|and|so|yet|however)[, ]+([a-z])/i,
+    (_, lead, _conj, ch) => lead + ch.toUpperCase()
+  );
+}
+
 // Format the eval swing readout shown next to the sparkline header.
 function fmtSwing(before, after, perspective) {
   if (after >= 99) return "+M";
@@ -354,11 +365,11 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
     }
   };
 
-  const sendChat = async () => {
-    const q = chatInput.trim();
+  const sendChat = async (override) => {
+    const q = ((override ?? chatInput) || "").trim();
     if (!q || chatSending || !apiKey) return;
     setChatSending(true);
-    setChatInput("");
+    if (override == null) setChatInput("");
     const currentMsgs = [...chatHistory];
     setChatHistory((prev) => [...prev, { role: "user", text: q }]);
     try {
@@ -561,7 +572,7 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
                 </div>
                 {explanation ? (
                   <div style={{ fontSize: 13, color: k.textMute, lineHeight: 1.55 }}>
-                    <AnnotatedText text={explanation} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
+                    <AnnotatedText text={deconjunct(explanation)} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
                   </div>
                 ) : loading || analysisStatus === "loading" ? (
                   <div style={{ fontSize: 13, color: k.textDim, fontStyle: "italic", animation: "kbz-pulse 1.4s ease-in-out infinite" }}>
@@ -629,8 +640,9 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
                   {suggestedQ ?? "Why did this feel right at the board?"}
                 </div>
                 <button
-                  onClick={() => setChatInput(suggestedQ ?? "Why did this feel right at the board?")}
-                  style={{ background: "transparent", border: "none", color: k.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                  onClick={() => sendChat(suggestedQ ?? "Why did this feel right at the board?")}
+                  disabled={chatSending}
+                  style={{ background: "transparent", border: "none", color: k.accent, fontSize: 12, fontWeight: 600, cursor: chatSending ? "default" : "pointer", opacity: chatSending ? 0.5 : 1 }}
                 >
                   Ask ›
                 </button>

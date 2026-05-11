@@ -2,10 +2,10 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-// v1.4 — tightens the narrative to ≤2 sentences and introduces the
-// ++positive++ / ~~negative~~ inline emphasis markers consumed by the
-// editorial pull-quote in GameOverview.
-export const PROMPT_VERSION = "v1.4";
+// v1.5 — sharpens the headline-vs-explanation split (headline = consequence,
+// explanation = on-board mechanism) and forbids the explanation from
+// starting with a conjunction that depends on the headline above.
+export const PROMPT_VERSION = "v1.5";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -219,9 +219,9 @@ Return ONLY valid JSON, no markdown:
   "moments": [
     {
       "moveIdx": <number>,
-      "headline": "ONE editorial-style sentence, plain prose, no annotations, no SAN move names. Pull-quote voice — eg. 'You gave away the bishop pair — and a winning position — for one pawn and a check.' The reader has the board, the move, and the eval swing; the headline names the *stakes*.",
+      "headline": "ONE editorial-style sentence, plain prose, no annotations, no SAN move names. Pull-quote voice naming the CONSEQUENCE — eg. 'You gave away the bishop pair — and a winning position — for one pawn and a check.' The reader has the board, the move, and the eval swing; the headline names the *stakes*.",
       "card_teaser": "ONE plain-language sentence summarising what happened. No annotations. Used on list cards alongside the headline.",
-      "explanation": "2-3 short sentences with [[square/piece/move]] annotations: what happened and why it matters. Bold the action verb (**trade**, **sacrifice**, **defend**) when natural.",
+      "explanation": "2-3 short sentences explaining the MECHANISM on the board (what tactical/positional geometry was at play). Annotation-heavy: use [[square]], [[piece|square]], [[move|from-to]] to anchor every key square. MUST start as a self-contained sentence — never with a conjunction ('But', 'And', 'So', 'Yet', 'However') that depends on the headline above. Do NOT restate the swing, the classification, or the better-line move; the UI already shows those.",
       "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
       "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up question>"
     }
