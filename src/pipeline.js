@@ -12,6 +12,7 @@ export function mergeAnalysis(game, result) {
     if (!a) return m;
     return {
       ...m,
+      card_teaser: a.card_teaser ?? m.card_teaser,
       explanation: a.explanation ?? m.explanation,
       betterMoves: a.betterMoves ?? m.betterMoves,
       qa: a.suggestedQuestion ? { question: a.suggestedQuestion, answer: null } : m.qa,
@@ -105,7 +106,7 @@ async function fetchLichessCloudEval(fen, multiPv, needsFlip) {
 // Computes engine data for a single ply (used for lazy per-move analysis).
 // Tries Lichess cloud-eval first if lichessGameId provided, falls back to local engine.
 // Returns { top_alternatives, refutation_pv } in the same shape as computeMomentEngineData.
-export async function computeSingleMoveEngineData(positions, plyIdx, engine, { depth = 18, lichessGameId } = {}) {
+export async function computeSingleMoveEngineData(positions, plyIdx, engine, { depth = 18, lichessGameId, numPv = 3 } = {}) {
   const posBefore = positions[plyIdx - 1];
   const fenBefore = posBefore?.fen;
   if (!fenBefore) return null;
@@ -114,10 +115,10 @@ export async function computeSingleMoveEngineData(positions, plyIdx, engine, { d
 
   let topAlternatives = null;
   if (lichessGameId) {
-    topAlternatives = await fetchLichessCloudEval(fenBefore, 3, needsFlip).catch(() => null);
+    topAlternatives = await fetchLichessCloudEval(fenBefore, numPv, needsFlip).catch(() => null);
   }
   if (!topAlternatives && engine?.analyzePosition) {
-    const altLines = await engine.analyzePosition(fenBefore, depth, 3).catch(() => null);
+    const altLines = await engine.analyzePosition(fenBefore, depth, numPv).catch(() => null);
     topAlternatives = (altLines ?? []).map(l => ({
       san: l.pv?.[0] ?? null,
       eval_cp: l.mate != null ? null : Math.round((l.score ?? 0) * 100 * sign),

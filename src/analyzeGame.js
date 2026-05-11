@@ -214,6 +214,7 @@ Return ONLY valid JSON, no markdown:
   "moments": [
     {
       "moveIdx": <number>,
+      "card_teaser": "ONE sentence, no annotations, plain everyday language: what happened at this moment and why it mattered",
       "explanation": "1-2 sentences with [[square/piece/move]] annotations: what happened and why it matters",
       "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
       "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up question>"
@@ -224,6 +225,7 @@ Return ONLY valid JSON, no markdown:
 Rules:
 - ${betterMovesRule}${extraRules}
 - Output exactly the moveIdx values listed above, no more, no less
+- card_teaser must be ONE sentence only, no [[annotation]] syntax, plain language a non-expert can read
 - ${ANNOTATION_RULES}`;
 }
 
@@ -309,6 +311,39 @@ Reply with plain text only (no JSON).`;
 
   const { text } = await callApi([{ role: "user", content: prompt }], apiKey);
   return { text, prompt };
+}
+
+// Game-level chat: scoped to full-game context (narrative, eval curve, turning points).
+// Does NOT have per-position engine data — model must stay at principles level for tactical claims.
+export async function chatAboutGame({ summary, narrative, turningPoints, pgn, evals, messages, question, tone }, apiKey) {
+  const evalSample = evals?.length
+    ? 'Eval curve (sampled): ' + evals
+        .map((v, i) => (i % Math.max(1, Math.floor(evals.length / 20)) === 0 ? `m${i}:${v >= 99 ? '+M' : v <= -99 ? '-M' : v.toFixed(1)}` : null))
+        .filter(Boolean).join(' ')
+    : '';
+
+  const tpSummary = turningPoints?.length
+    ? 'Key turning points:\n' + turningPoints.map(m =>
+        `- Move ${m.moveIdx} (${m.moveNumber} ${m.notation}, ${m.classification}): ${m.card_teaser ?? ''}`
+      ).join('\n')
+    : '';
+
+  const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? 'Unknown'}, ${summary.result}).
+${narrative ? `Game narrative: ${narrative}` : ''}
+${tpSummary}
+${evalSample}
+${pgn ? `PGN:\n${pgn}` : ''}
+Tone: ${toneDesc(tone)}
+Be concise. Use markdown: **bold** for key points, *italic* for concepts.
+IMPORTANT: You have game-level context but not position-specific engine analysis for arbitrary positions. For strategic/narrative questions, answer from the context above. For specific tactical sequences not shown in the turning points, describe ideas in words rather than naming specific moves you cannot verify.`;
+
+  const apiMessages = [
+    ...messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+    { role: 'user', content: question },
+  ];
+
+  const { text } = await callApi(apiMessages, apiKey, { system, maxTokens: 512 });
+  return { text, systemPrompt: system };
 }
 
 export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine }, apiKey) {

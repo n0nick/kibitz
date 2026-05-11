@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, createContext, useContext } from "react";
+import { useState, useRef, useEffect, useContext } from "react";
 import { parseLichessUrl, fetchLichessGame, parseGame, reclassifyWithEvals, sanToSquares } from "./parseGame";
 import { analyzeSinglePosition, chatAboutPosition, TONES, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
 import { FlagButton } from "./FlagButton";
@@ -6,10 +6,10 @@ import ReportViewer from "./ReportViewer";
 import { fetchLichessAccount, fetchLichessRecentGames } from "./lichess";
 import { analyzePosition, browserEngine, engineLineText } from "./stockfish";
 import { mergeAnalysis, analyzePositions, analyzeWithClaude, computeSingleMoveEngineData } from "./pipeline";
-
-// ─── Game context ─────────────────────────────────────────────────────────────
-
-const GameContext = createContext(null);
+import { runMigrations, evalsKey } from "./migrations";
+import { GameOverview } from "./GameOverview";
+import { MoveAnalysisView } from "./MoveAnalysisView";
+import { GameContext } from "./context";
 
 // ─── Piece unicode ────────────────────────────────────────────────────────────
 
@@ -1339,7 +1339,7 @@ function GameReviewContent({ gameId, onReset, apiKey, tone, onPatchMoment, analy
             {(() => {
               let cached = false;
               try {
-                const raw = localStorage.getItem(`kibitz-evals-${gameId}`);
+                const raw = localStorage.getItem(evalsKey(gameId));
                 if (raw) { const { ts } = JSON.parse(raw); cached = Date.now() - ts < CACHE_TTL; }
               } catch {}
               return (
@@ -1729,22 +1729,49 @@ export default function App() {
   const [importError, setImportError] = useState(null);
   const [analysisStatus, setAnalysisStatus] = useState(null); // null | 'awaiting-evals' | 'loading' | 'done' | 'error'
   const [localProgress, setLocalProgress] = useState(null); // null | { current, total }
+  const [perspective, setPerspective] = useState(null); // null | 'white' | 'black'
+  const [drillInPly, setDrillInPly] = useState(null);
   const pollingRef = useRef(null);
   const localAbortRef = useRef(null);
+
+  // Run cache migrations on startup
+  useEffect(() => { runMigrations(); }, []);
+
+  // Perspective inference: runs whenever a game is loaded
+  useEffect(() => {
+    if (!gameData?.summary || !gameId) return;
+    const saved = localStorage.getItem(`kibitz-perspective-${gameId}`);
+    if (saved === 'white' || saved === 'black') { setPerspective(saved); return; }
+    if (lichessUser) {
+      const user = lichessUser.toLowerCase();
+      if (gameData.summary.white?.toLowerCase() === user) { setPerspective('white'); return; }
+      if (gameData.summary.black?.toLowerCase() === user) { setPerspective('black'); return; }
+    }
+    setPerspective(null); // Show perspective prompt
+  }, [gameData?.summary, gameId, lichessUser]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const gid = params.get("game");
+    const moveParam = parseInt(params.get("move"), 10);
+    const view = params.get("view");
     if (!gid) return;
     if (gid === "opera-1858") {
       setGameData(DEMO_GAME);
       setGameId("opera-1858");
-      setScreen("review");
+      if (!isNaN(moveParam) && !view) {
+        setDrillInPly(moveParam);
+        setScreen("drill-in");
+      } else if (view === "review") {
+        setScreen("review");
+      } else {
+        setScreen("overview");
+      }
     } else if (gameSource(gid) === "pgn") {
       const pgn = getCachedPgn(gid);
-      if (pgn) doImportPgn(pgn);
+      if (pgn) doImportPgn(pgn, false, !isNaN(moveParam) && !view ? moveParam : null, view);
     } else {
-      doImport(gid);
+      doImport(gid, false, !isNaN(moveParam) && !view ? moveParam : null, view);
     }
   }, []);
 
@@ -1759,7 +1786,7 @@ export default function App() {
           clearInterval(pollingRef.current);
           localAbortRef.current?.abort();
           setLocalProgress(null);
-          localStorage.removeItem(`kibitz-evals-${gameId}`);
+          localStorage.removeItem(evalsKey(gameId));
           setGameData({ ...parsed, pgn, gameId });
           if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, gameId);
           else setAnalysisStatus(null);
@@ -1774,9 +1801,9 @@ export default function App() {
     localAbortRef.current = controller;
     setLocalProgress({ current: 0, total: gameData.positions.length - 1 });
 
-    const evalsKey = `kibitz-evals-${gameId}`;
+    const evKey = evalsKey(gameId);
     try {
-      const raw = localStorage.getItem(evalsKey);
+      const raw = localStorage.getItem(evKey);
       if (raw) {
         const { data, ts } = JSON.parse(raw);
         if (Date.now() - ts < CACHE_TTL) {
@@ -1787,9 +1814,9 @@ export default function App() {
           else setAnalysisStatus(null);
           return;
         }
-        localStorage.removeItem(evalsKey);
+        localStorage.removeItem(evKey);
       }
-    } catch { localStorage.removeItem(evalsKey); }
+    } catch { localStorage.removeItem(evKey); }
 
     const reclassified = await analyzePositions(gameData, browserEngine, {
       signal: controller.signal,
@@ -1797,16 +1824,24 @@ export default function App() {
     });
     if (!reclassified) return;
 
-    localStorage.setItem(evalsKey, JSON.stringify({ data: reclassified.evals, ts: Date.now() }));
+    localStorage.setItem(evKey, JSON.stringify({ data: reclassified.evals, ts: Date.now() }));
     setGameData(prev => ({ ...reclassified, pgn: prev?.pgn, gameId: prev?.gameId }));
     setLocalProgress(null);
     if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId);
     else setAnalysisStatus(null);
   };
 
-  const doImport = async (id, force = false) => {
+  const resolveScreen = (initialPly, view) => {
+    if (view === "review") return "review";
+    if (initialPly !== null && initialPly !== undefined && !isNaN(initialPly)) return "drill-in";
+    return "overview";
+  };
+
+  const doImport = async (id, force = false, initialPly = null, view = null) => {
     setScreen("loading");
     setImportError(null);
+    setPerspective(null);
+    setDrillInPly(null);
     try {
       const cached = !force && getCachedPgn(id);
       let pgn;
@@ -1823,13 +1858,14 @@ export default function App() {
       if (!parsed.hasEvals) {
         setGameData(gameWithMeta);
         setGameId(id);
-        setScreen("review");
+        setScreen("overview");
         setAnalysisStatus("awaiting-evals");
         return;
       }
       setGameData(gameWithMeta);
       setGameId(id);
-      setScreen("review");
+      if (initialPly !== null) setDrillInPly(initialPly);
+      setScreen(resolveScreen(initialPly, view));
       if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force);
     } catch (e) {
       setImportError(e.message);
@@ -1837,9 +1873,11 @@ export default function App() {
     }
   };
 
-  const doImportPgn = async (pgn, force = false) => {
+  const doImportPgn = async (pgn, force = false, initialPly = null, view = null) => {
     setScreen("loading");
     setImportError(null);
+    setPerspective(null);
+    setDrillInPly(null);
     try {
       const parsed = parseGame(pgn);
       const id = pgnGameId(pgn);
@@ -1847,11 +1885,13 @@ export default function App() {
       addToHistory({ id, source: "pgn", white: parsed.summary.white, black: parsed.summary.black, result: parsed.summary.result });
       setGameData({ ...parsed, pgn, gameId: id });
       setGameId(id);
-      setScreen("review");
+      if (initialPly !== null) setDrillInPly(initialPly);
       if (!parsed.hasEvals) {
+        setScreen("overview");
         setAnalysisStatus("awaiting-evals");
         return;
       }
+      setScreen(resolveScreen(initialPly, view));
       if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force);
     } catch (e) {
       setImportError(e.message ?? "Invalid PGN");
@@ -1901,14 +1941,85 @@ export default function App() {
     setGameData(null);
     setGameId(null);
     setAnalysisStatus(null);
+    setPerspective(null);
+    setDrillInPly(null);
     history.replaceState(null, "", window.location.pathname);
+  };
+
+  const handlePerspectiveSet = (p) => {
+    setPerspective(p);
+    try { localStorage.setItem(`kibitz-perspective-${gameId}`, p); } catch {}
+  };
+
+  const handleDrillIn = (plyIdx) => {
+    setDrillInPly(plyIdx);
+    setScreen("drill-in");
+    const params = new URLSearchParams();
+    params.set("game", gameId);
+    params.set("move", plyIdx);
+    window.history.pushState(null, "", "?" + params.toString());
+  };
+
+  const handleBackFromDrillIn = () => {
+    setScreen("overview");
+    const params = new URLSearchParams();
+    params.set("game", gameId);
+    window.history.pushState(null, "", "?" + params.toString());
+  };
+
+  const handleStartReview = () => {
+    setScreen("review");
+    const params = new URLSearchParams();
+    params.set("game", gameId);
+    params.set("view", "review");
+    window.history.pushState(null, "", "?" + params.toString());
   };
 
   if (window.location.pathname === '/report') return <ReportViewer />;
   if (screen === "loading") return <LoadingScreen />;
+
+  if (screen === "overview" && gameData) {
+    return (
+      <GameContext.Provider value={gameData}>
+        <GameOverview
+          game={gameData}
+          gameId={gameId}
+          perspective={perspective}
+          onPerspectiveSet={handlePerspectiveSet}
+          onReset={handleReset}
+          onDrillIn={handleDrillIn}
+          onStartReview={handleStartReview}
+          apiKey={apiKey}
+          tone={tone}
+          analysisStatus={analysisStatus}
+          localProgress={localProgress}
+          startLocalAnalysis={startLocalAnalysis}
+        />
+      </GameContext.Provider>
+    );
+  }
+
+  if (screen === "drill-in" && gameData && drillInPly !== null) {
+    return (
+      <GameContext.Provider value={gameData}>
+        <MoveAnalysisView
+          plyIdx={drillInPly}
+          gameId={gameId}
+          apiKey={apiKey}
+          tone={tone}
+          perspective={perspective}
+          onBack={handleBackFromDrillIn}
+          analysisStatus={analysisStatus}
+          onPatchMoment={patchMomentExplanation}
+        />
+      </GameContext.Provider>
+    );
+  }
+
   if (screen === "review" && gameData) {
     return <GameReview game={gameData} gameId={gameId} onReset={handleReset} apiKey={apiKey} tone={tone} onPatchMoment={patchMomentExplanation} analysisStatus={analysisStatus} localProgress={localProgress} startLocalAnalysis={startLocalAnalysis} />;
   }
+
   return (
     <ImportScreen
       onImport={doImport}
@@ -1916,7 +2027,7 @@ export default function App() {
       onDemo={() => {
         setGameData(DEMO_GAME);
         setGameId("opera-1858");
-        setScreen("review");
+        setScreen("overview");
       }}
       error={importError}
       setError={setImportError}
