@@ -73,12 +73,26 @@ body {
 .report-body strong { color: var(--kbz-text); }
 .report-body a  { color: var(--kbz-accent); text-decoration: underline; }
 .report-body blockquote { border-left: 3px solid var(--kbz-hairline); padding-left: 0.75rem; color: var(--kbz-text-mute); margin: 0.5rem 0; }
-.report-body pre { background: var(--kbz-surface); border: 1px solid var(--kbz-hairline); border-radius: 6px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 0.5rem 0; }
+.report-body pre { background: var(--kbz-surface-2); border: 1px solid var(--kbz-hairline); border-radius: 8px; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 0.5rem 0; }
 .report-body .code-wrapper { position: relative; }
-.report-body .copy-btn { position: absolute; top: 0.4rem; right: 0.4rem; padding: 0.3rem; border-radius: 4px; background: rgba(63,63,70,0.7); color: var(--kbz-text-mute); border: none; cursor: pointer; opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s; line-height: 0; }
-.report-body .code-wrapper:hover .copy-btn { opacity: 1; }
-.report-body .copy-btn:hover { background: rgba(82,82,91,0.9); color: var(--kbz-text); }
-.report-body .copy-btn.copied { color: var(--kbz-accent); }
+.report-body .copy-btn {
+  position: absolute; top: 6px; right: 6px;
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border-radius: 6px;
+  background: var(--kbz-surface);
+  color: var(--kbz-text-mute);
+  border: 1px solid var(--kbz-hairline);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+  box-shadow: 0 1px 2px rgba(60,40,20,0.06);
+}
+.report-body .copy-btn svg { display: block; width: 14px; height: 14px; }
+.report-body .code-wrapper:hover .copy-btn,
+.report-body .copy-btn:focus-visible { opacity: 1; }
+.report-body .copy-btn:hover { color: var(--kbz-text); border-color: rgba(0,0,0,0.15); }
+.report-body .copy-btn.copied { color: var(--kbz-accent); border-color: var(--kbz-accent); }
 .report-body code { font-family: var(--kbz-mono); font-size: 0.8rem; }
 .report-body ul { list-style: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
 .report-body li { margin: 0.2rem 0; }
