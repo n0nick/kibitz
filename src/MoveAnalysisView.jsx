@@ -200,17 +200,19 @@ const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 // Renders full analysis for a single ply. Used in drill-in route and old review.
 // Manages its own analysis state, pulling from/saving to localStorage.
 
-export function MoveAnalysisView({ plyIdx, gameId, apiKey, tone, perspective, onBack, analysisStatus, onPatchMoment }) {
+export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective, onBack, analysisStatus, onPatchMoment, turningPoints = [] }) {
   const game = useContext(GameContext);
   const { positions, evals, moments, momentByMoveIdx, summary, pgn, promptSentToLlm, momentEngineData } = game;
+
+  const [plyIdx, setPlyIdx] = useState(initialPly ?? 1);
 
   const currentMoment = momentByMoveIdx[plyIdx] ?? null;
   const currentPos = positions[plyIdx];
 
-  const [analysisText, setAnalysisText] = useState(null); // for non-moment moves
+  const [analysisText, setAnalysisText] = useState(null);
   const [analysisPrompt, setAnalysisPrompt] = useState(null);
   const [perMoveEngData, setPerMoveEngData] = useState(null);
-  const [richEngData, setRichEngData] = useState(null); // 10-PV for chat
+  const [richEngData, setRichEngData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [expandedAlt, setExpandedAlt] = useState(null);
@@ -219,6 +221,7 @@ export function MoveAnalysisView({ plyIdx, gameId, apiKey, tone, perspective, on
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const chatEndRef = useRef(null);
+  const rightPanelRef = useRef(null);
 
   const flip = perspective === 'black';
   const fenBefore = positions[plyIdx - 1]?.fen;
@@ -227,31 +230,55 @@ export function MoveAnalysisView({ plyIdx, gameId, apiKey, tone, perspective, on
     ? sanToSquares(positions[currentMoment.moveIdx - 1].fen, currentMoment.betterMoves[expandedAlt].move)
     : null;
 
-  // Load cached per-move analysis on mount
-  useEffect(() => {
-    if (currentMoment?.explanation) return; // already have analysis from game-level pass
-    const cacheKey = perMoveKey(gameId, plyIdx, tone);
-    try {
-      const raw = localStorage.getItem(cacheKey);
-      if (raw) {
-        const { text, prompt, ts } = JSON.parse(raw);
-        if (Date.now() - ts < CACHE_TTL) {
-          setAnalysisText(text);
-          setAnalysisPrompt(prompt);
-        }
-      }
-    } catch {}
-  }, [gameId, plyIdx, tone]);
+  const turningPointSet = new Set(turningPoints);
+  const isKeyMoment = turningPointSet.has(plyIdx);
 
-  // Pre-load rich engine data (10 PVs) for chat context on mount
+  // Reset per-ply state and load cache when plyIdx changes
   useEffect(() => {
-    if (!positions[plyIdx - 1]?.fen) return;
-    computeSingleMoveEngineData(positions, plyIdx, browserEngine, {
-      depth: 14,
-      lichessGameId: gameSource(gameId) === 'lichess' ? gameId : null,
-      numPv: 10,
-    }).then(setRichEngData).catch(() => {});
-  }, [gameId, plyIdx]);
+    setAnalysisText(null);
+    setAnalysisPrompt(null);
+    setPerMoveEngData(null);
+    setRichEngData(null);
+    setLoading(false);
+    setError(false);
+    setExpandedAlt(null);
+    setHoverHighlight(null);
+    setChatHistory([]);
+    setChatInput("");
+    setChatSending(false);
+    rightPanelRef.current?.scrollTo({ top: 0 });
+
+    const moment = momentByMoveIdx[plyIdx];
+    if (!moment?.explanation) {
+      const cacheKey = perMoveKey(gameId, plyIdx, tone);
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const { text, prompt, ts } = JSON.parse(raw);
+          if (Date.now() - ts < CACHE_TTL) { setAnalysisText(text); setAnalysisPrompt(prompt); }
+        }
+      } catch {}
+    }
+
+    if (positions[plyIdx - 1]?.fen) {
+      computeSingleMoveEngineData(positions, plyIdx, browserEngine, {
+        depth: 14,
+        lichessGameId: gameSource(gameId) === 'lichess' ? gameId : null,
+        numPv: 10,
+      }).then(setRichEngData).catch(() => {});
+    }
+  }, [plyIdx, gameId, tone]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowLeft') setPlyIdx(p => Math.max(1, p - 1));
+      if (e.key === 'ArrowRight') setPlyIdx(p => Math.min(positions.length - 1, p + 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [positions.length]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -365,14 +392,17 @@ export function MoveAnalysisView({ plyIdx, gameId, apiKey, tone, perspective, on
       <div className="flex items-center bg-zinc-900/90 backdrop-blur border-b border-zinc-800 shrink-0 px-2">
         <button onClick={onBack}
           className="px-3 py-3.5 text-zinc-600 hover:text-zinc-300 transition-colors text-sm shrink-0">←</button>
-        <div className="flex-1 flex items-center gap-3 px-2 py-3.5 min-w-0">
+        <div className="flex-1 flex items-center gap-2.5 px-2 py-3.5 min-w-0">
           <span className="text-sm font-mono font-semibold text-zinc-100 shrink-0">{moveLabel}</span>
           <Chip classification={classification} small />
+          {isKeyMoment && <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest shrink-0">key</span>}
         </div>
-        <div className="flex items-center gap-2 px-3 shrink-0">
-          <span className="text-xs text-zinc-600">
-            {summary.white} vs {summary.black}
-          </span>
+        <div className="flex items-center gap-1 px-2 shrink-0">
+          <button onClick={() => setPlyIdx(p => Math.max(1, p - 1))} disabled={plyIdx <= 1}
+            className="px-2 py-2 text-zinc-500 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-default transition-colors text-base leading-none">‹</button>
+          <span className="text-[10px] text-zinc-600 tabular-nums w-12 text-center">{plyIdx} / {positions.length - 1}</span>
+          <button onClick={() => setPlyIdx(p => Math.min(positions.length - 1, p + 1))} disabled={plyIdx >= positions.length - 1}
+            className="px-2 py-2 text-zinc-500 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-default transition-colors text-base leading-none">›</button>
         </div>
       </div>
 
@@ -399,7 +429,7 @@ export function MoveAnalysisView({ plyIdx, gameId, apiKey, tone, perspective, on
         </div>
 
         {/* Right panel: commentary + chat */}
-        <div className="md:flex-1 md:overflow-y-auto">
+        <div ref={rightPanelRef} className="md:flex-1 md:overflow-y-auto">
         <div className="max-w-2xl mx-auto md:py-6 md:px-4">
 
         {/* Commentary card */}
