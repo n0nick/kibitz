@@ -754,7 +754,25 @@ function ImportScreen({ onImport, onImportPgn, onDemo, error, setError, apiKey, 
                 <span style={{ color: k.accent }}>Let's find yours.</span>
               </Editorial>
               <div style={{ fontSize: 13, color: k.textMute, lineHeight: 1.5 }}>
-                Add an Anthropic API key for coaching, and connect Lichess to pull your games.
+                Add an{" "}
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: k.accent, textDecoration: "underline", textUnderlineOffset: 2, textDecorationColor: `${k.accent}66` }}
+                >
+                  Anthropic API key
+                </a>{" "}
+                for coaching, and{" "}
+                <a
+                  href="https://lichess.org/account/oauth/token/create?scopes[]=&description=Kibitz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: k.accent, textDecoration: "underline", textUnderlineOffset: 2, textDecorationColor: `${k.accent}66` }}
+                >
+                  connect Lichess
+                </a>{" "}
+                to pull your games.
               </div>
             </div>
           )}
