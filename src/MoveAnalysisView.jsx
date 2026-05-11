@@ -264,6 +264,8 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
 
   }, [plyIdx, gameId, tone]);
 
+  const touchStartX = useRef(null);
+
   // Keyboard navigation
   useEffect(() => {
     const onKey = (e) => {
@@ -393,7 +395,16 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
   if (!currentPos) return null;
 
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
+    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden"
+      onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+      onTouchEnd={(e) => {
+        if (touchStartX.current === null) return;
+        const dx = e.changedTouches[0].clientX - touchStartX.current;
+        touchStartX.current = null;
+        if (Math.abs(dx) < 40) return;
+        if (dx < 0) setPlyIdx(p => Math.min(positions.length - 1, p + 1));
+        else setPlyIdx(p => Math.max(1, p - 1));
+      }}>
       {/* Header */}
       <div className="flex items-center bg-zinc-900/90 backdrop-blur border-b border-zinc-800 shrink-0 px-2">
         <button onClick={onBack}

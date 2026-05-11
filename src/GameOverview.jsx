@@ -257,6 +257,18 @@ export function GameOverview({
     setActiveCard(Math.max(0, Math.min(totalCards - 1, idx)));
   };
 
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (!reelRef.current) return;
+      const w = reelRef.current.clientWidth;
+      if (e.key === 'ArrowLeft') reelRef.current.scrollTo({ left: w * Math.max(0, activeCard - 1), behavior: 'smooth' });
+      if (e.key === 'ArrowRight') reelRef.current.scrollTo({ left: w * Math.min(totalCards - 1, activeCard + 1), behavior: 'smooth' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeCard, totalCards]);
+
   const sendGameChat = async () => {
     const q = gameChatInput.trim();
     if (!q || gameChatSending || !apiKey) return;
