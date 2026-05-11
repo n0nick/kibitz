@@ -139,27 +139,21 @@ export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = []) 
 }
 
 export const MAX_MOMENTS = 12;
+export const MAX_OVERVIEW_MOMENTS = 5;
 
-export function selectMoments(moments, evals) {
-  if (moments.length <= MAX_MOMENTS) return [...moments].sort((a, b) => a.moveIdx - b.moveIdx);
-  // Proportional sampling across game thirds for extreme outliers
-  const totalMoves = evals.length - 1;
-  const swing = (m) => Math.abs((evals[m.moveIdx] ?? 0) - (evals[m.moveIdx - 1] ?? 0));
-  const bySwing = (arr) => [...arr].sort((a, b) => swing(b) - swing(a));
-  const third = totalMoves / 3;
-  const sections = [
-    bySwing(moments.filter((m) => m.moveIdx <= third)),
-    bySwing(moments.filter((m) => m.moveIdx > third && m.moveIdx <= 2 * third)),
-    bySwing(moments.filter((m) => m.moveIdx > 2 * third)),
-  ];
-  const perSection = Math.ceil(MAX_MOMENTS / 3);
-  const selected = new Set(sections.flatMap((s) => s.slice(0, perSection)));
-  if (selected.size < MAX_MOMENTS) {
-    bySwing(moments.filter((m) => !selected.has(m)))
-      .slice(0, MAX_MOMENTS - selected.size)
-      .forEach((m) => selected.add(m));
-  }
-  return [...selected].sort((a, b) => a.moveIdx - b.moveIdx);
+export function selectMoments(moments, evals, max = MAX_MOMENTS) {
+  if (moments.length <= max) return [...moments].sort((a, b) => a.moveIdx - b.moveIdx);
+  const score = (m) => {
+    const before = evals[m.moveIdx - 1] ?? 0;
+    const after = evals[m.moveIdx] ?? 0;
+    const swing = Math.abs(after - before);
+    const decisive = Math.abs(before) >= 1.5 || Math.abs(after) >= 1.5;
+    return swing * (decisive ? 1.0 : 0.3);
+  };
+  return [...moments]
+    .sort((a, b) => score(b) - score(a))
+    .slice(0, max)
+    .sort((a, b) => a.moveIdx - b.moveIdx);
 }
 
 // When momentEngineData is provided, produces the v1.2 engine-grounded prompt
@@ -214,6 +208,7 @@ Return ONLY valid JSON, no markdown:
   "moments": [
     {
       "moveIdx": <number>,
+      "card_teaser": "ONE sentence, no annotations, plain everyday language: what happened at this moment and why it mattered",
       "explanation": "1-2 sentences with [[square/piece/move]] annotations: what happened and why it matters",
       "betterMoves": [{"move": "<SAN>", "reason": "<one sentence with [[annotations]]>"}],
       "suggestedQuestion": "<omit unless there is a genuinely interesting tactical or strategic follow-up question>"
@@ -224,6 +219,7 @@ Return ONLY valid JSON, no markdown:
 Rules:
 - ${betterMovesRule}${extraRules}
 - Output exactly the moveIdx values listed above, no more, no less
+- card_teaser must be ONE sentence only, no [[annotation]] syntax, plain language a non-expert can read
 - ${ANNOTATION_RULES}`;
 }
 
@@ -309,6 +305,39 @@ Reply with plain text only (no JSON).`;
 
   const { text } = await callApi([{ role: "user", content: prompt }], apiKey);
   return { text, prompt };
+}
+
+// Game-level chat: scoped to full-game context (narrative, eval curve, turning points).
+// Does NOT have per-position engine data — model must stay at principles level for tactical claims.
+export async function chatAboutGame({ summary, narrative, turningPoints, pgn, evals, messages, question, tone }, apiKey) {
+  const evalSample = evals?.length
+    ? 'Eval curve (sampled): ' + evals
+        .map((v, i) => (i % Math.max(1, Math.floor(evals.length / 20)) === 0 ? `m${i}:${v >= 99 ? '+M' : v <= -99 ? '-M' : v.toFixed(1)}` : null))
+        .filter(Boolean).join(' ')
+    : '';
+
+  const tpSummary = turningPoints?.length
+    ? 'Key turning points:\n' + turningPoints.map(m =>
+        `- Move ${m.moveIdx} (${m.moveNumber} ${m.notation}, ${m.classification}): ${m.card_teaser ?? ''}`
+      ).join('\n')
+    : '';
+
+  const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? 'Unknown'}, ${summary.result}).
+${narrative ? `Game narrative: ${narrative}` : ''}
+${tpSummary}
+${evalSample}
+${pgn ? `PGN:\n${pgn}` : ''}
+Tone: ${toneDesc(tone)}
+Be concise. Use markdown: **bold** for key points, *italic* for concepts.
+IMPORTANT: You have game-level context but not position-specific engine analysis for arbitrary positions. For strategic/narrative questions, answer from the context above. For specific tactical sequences not shown in the turning points, describe ideas in words rather than naming specific moves you cannot verify.`;
+
+  const apiMessages = [
+    ...messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+    { role: 'user', content: question },
+  ];
+
+  const { text } = await callApi(apiMessages, apiKey, { system, maxTokens: 512 });
+  return { text, systemPrompt: system };
 }
 
 export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine }, apiKey) {
