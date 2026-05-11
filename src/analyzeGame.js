@@ -98,6 +98,13 @@ export function scrubExplanation(text, allowedSANs) {
 
 const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
 
+function perspectiveInstruction(perspective) {
+  if (!perspective) return '';
+  const you = perspective === 'white' ? 'White' : 'Black';
+  const opp = perspective === 'white' ? 'Black' : 'White';
+  return `The user is playing the ${you} pieces. Address the user directly as "you" and their opponent as "your opponent" (or "${opp}" when piece color is needed for clarity). Frame eval swings from the user's perspective: when the eval moves in the user's favor, call it relief or opportunity; when against the user, frame it as a problem they face. Never use neutral commentator voice ("${you} played", "${you} needs to") for moves the user themselves made. When the opponent moves, say "your opponent played X" or "${opp} played X" — never "you played X" for opponent moves.`;
+}
+
 // Formats one moment entry for the prompt, including engine alternatives and
 // refutation when momentEngineData is provided (v1.2 architecture).
 export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = []) {
@@ -159,7 +166,7 @@ export function selectMoments(moments, evals, max = MAX_MOMENTS) {
 // When momentEngineData is provided, produces the v1.2 engine-grounded prompt
 // (engine alternatives listed per moment, LLM forbidden from inventing moves).
 // Falls back to v1.1 format when called with no engine data (e.g. promptBuilder override).
-export function buildPrompt(pgn, moments, summary, evals, tone, { perPly = [], positions = [], momentEngineData = {} } = {}) {
+export function buildPrompt(pgn, moments, summary, evals, tone, { perPly = [], positions = [], momentEngineData = {}, perspective = null } = {}) {
   const hasEngineData = Object.keys(momentEngineData).length > 0;
   const cleanPgn = pgn.replace(/\{[^}]*\}/g, "").replace(/\s+/g, " ").trim();
   const topMoments = selectMoments(moments, evals);
@@ -173,9 +180,10 @@ export function buildPrompt(pgn, moments, summary, evals, tone, { perPly = [], p
     return `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}): ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? "+" : ""}${delta.toFixed(1)})`;
   }).join("\n");
 
+  const perspLine = perspectiveInstruction(perspective);
   const systemLine = hasEngineData
-    ? "You are a chess coach explaining specific moments in a game. You are NOT a chess engine. All chess truth comes from the engine output provided below. You translate engine analysis into coaching prose.\n\n"
-    : "";
+    ? `You are a chess coach explaining specific moments in a game. You are NOT a chess engine. All chess truth comes from the engine output provided below. You translate engine analysis into coaching prose.${perspLine ? `\n\n${perspLine}` : ''}\n\n`
+    : (perspLine ? `${perspLine}\n\n` : "");
 
   const evalHeader = hasEngineData
     ? "Key moments (eval in pawns, positive = White advantage; each entry names the side that just moved):"
@@ -265,7 +273,7 @@ export async function analyzeGameWithUsage(pgn, moments, summary, evals, apiKey,
   return { result: JSON.parse(repairJson(match[0])), usage, prompt };
 }
 
-export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone, engineData }, apiKey) {
+export async function analyzeSinglePosition({ summary, moveNumber, notation, classification, evalBefore, evalAfter, fen, tone, engineData, perspective }, apiKey) {
   const fmt = (v) => (v >= 99 ? "M" : v <= -99 ? "-M" : v.toFixed(1));
   const fmtCp = cp => cp == null ? '?' : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
 
@@ -283,9 +291,10 @@ export async function analyzeSinglePosition({ summary, moveNumber, notation, cla
     engineSection += `\nEngine continuation after ${notation}: ${engineData.refutation_pv.slice(0, 4).join(' ')}`;
   }
 
+  const perspLine = perspectiveInstruction(perspective);
   const systemLine = engineData
-    ? 'You are a chess coach. You are NOT a chess engine. All chess truth comes from the engine output provided below. You translate engine analysis into coaching prose.\n\n'
-    : '';
+    ? `You are a chess coach. You are NOT a chess engine. All chess truth comes from the engine output provided below. You translate engine analysis into coaching prose.${perspLine ? `\n\n${perspLine}` : ''}\n\n`
+    : (perspLine ? `${perspLine}\n\n` : '');
 
   const safetyRules = engineData ? `\nRules:
 - NEVER name a move anywhere in your response unless it appears verbatim in the engine alternatives or continuation provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
@@ -309,7 +318,7 @@ Reply with plain text only (no JSON).`;
 
 // Game-level chat: scoped to full-game context (narrative, eval curve, turning points).
 // Does NOT have per-position engine data — model must stay at principles level for tactical claims.
-export async function chatAboutGame({ summary, narrative, turningPoints, pgn, evals, messages, question, tone }, apiKey) {
+export async function chatAboutGame({ summary, narrative, turningPoints, pgn, evals, messages, question, tone, perspective }, apiKey) {
   const evalSample = evals?.length
     ? 'Eval curve (sampled): ' + evals
         .map((v, i) => (i % Math.max(1, Math.floor(evals.length / 20)) === 0 ? `m${i}:${v >= 99 ? '+M' : v <= -99 ? '-M' : v.toFixed(1)}` : null))
@@ -322,7 +331,8 @@ export async function chatAboutGame({ summary, narrative, turningPoints, pgn, ev
       ).join('\n')
     : '';
 
-  const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? 'Unknown'}, ${summary.result}).
+  const perspLine = perspectiveInstruction(perspective);
+  const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? 'Unknown'}, ${summary.result}).${perspLine ? `\n${perspLine}` : ''}
 ${narrative ? `Game narrative: ${narrative}` : ''}
 ${tpSummary}
 ${evalSample}
@@ -340,8 +350,9 @@ IMPORTANT: You have game-level context but not position-specific engine analysis
   return { text, systemPrompt: system };
 }
 
-export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine }, apiKey) {
-  const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown"}, ${summary.result}).
+export async function chatAboutPosition({ summary, moment, messages, question, tone, fen, engineLine, perspective }, apiKey) {
+  const perspLine = perspectiveInstruction(perspective);
+  const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown"}, ${summary.result}).${perspLine ? `\n${perspLine}` : ''}
 Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification})${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fen ? `\nPosition (FEN): ${fen}` : ""}${engineLine ? `\n${engineLine}` : ""}
 Tone: ${toneDesc(tone)}
 Be concise. Use markdown: **bold** for key points, *italic* for concepts. ${ANNOTATION_RULES}

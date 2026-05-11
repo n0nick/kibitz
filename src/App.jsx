@@ -847,7 +847,8 @@ export default function App() {
   };
 
   const runAnalysis = async (game, pgn, key, t, id, force = false) => {
-    const cacheKey = `kibitz-analysis-${id}-${t}-${DEFAULT_MODEL}-${PROMPT_VERSION}`;
+    const p = perspective ?? 'none';
+    const cacheKey = `kibitz-analysis-${id}-${t}-${DEFAULT_MODEL}-${PROMPT_VERSION}-${p}`;
     if (!force) {
       try {
         const raw = localStorage.getItem(cacheKey);
@@ -866,7 +867,7 @@ export default function App() {
     }
     setAnalysisStatus("loading");
     try {
-      const { result, prompt, momentEngineData } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t, engine: browserEngine });
+      const { result, prompt, momentEngineData } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t, engine: browserEngine, perspective });
       localStorage.setItem(cacheKey, JSON.stringify({ data: result, prompt, ts: Date.now() }));
       setGameData((prev) => prev ? { ...mergeAnalysis(prev, result), promptSentToLlm: prompt, momentEngineData } : prev);
       setAnalysisStatus("done");
@@ -875,6 +876,14 @@ export default function App() {
       setAnalysisStatus("error");
     }
   };
+
+  // Re-run analysis when perspective is first determined, since analysis may have
+  // run before perspective was set (race between perspective inference and analysis start).
+  useEffect(() => {
+    if (!perspective || !gameData?.moments || !apiKey) return;
+    runAnalysis(gameData, gameData.pgn, apiKey, tone, gameId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perspective]);
 
   const patchMomentExplanation = (momentId, explanation, singleAnalysisPrompt = null) => {
     setGameData((prev) => {

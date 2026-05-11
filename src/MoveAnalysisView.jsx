@@ -99,14 +99,15 @@ export function Board({ fen, fromSq, toSq, altFromSq, altToSq, hoverFromSq, hove
   );
 }
 
-export function EvalBar({ before, after }) {
+export function EvalBar({ before, after, perspective }) {
   const fmt = (v) => v >= 99 ? "M" : v <= -99 ? "-M" : v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
   const toPercent = (v) => v >= 99 ? 95 : v <= -99 ? 5 : ((Math.max(-6, Math.min(6, v)) + 6) / 12) * 100;
   const pct = toPercent(after);
   const isMateAfter  = after >= 99;
   const isMatedAfter = after <= -99;
   const swing = isMateAfter ? 99 - before : isMatedAfter ? -99 - before : after - before;
-  const gaining = swing > 0;
+  // positive swing = White gaining; for Black player that means losing ground
+  const gaining = perspective === 'black' ? swing < 0 : swing > 0;
   return (
     <div className="flex items-center gap-2.5">
       <span className="text-xs font-mono tabular-nums text-zinc-500 w-9 text-right shrink-0">{fmt(before)}</span>
@@ -251,7 +252,7 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
 
     const moment = momentByMoveIdx[plyIdx];
     if (!moment?.explanation) {
-      const cacheKey = perMoveKey(gameId, plyIdx, tone);
+      const cacheKey = perMoveKey(gameId, plyIdx, tone, perspective);
       try {
         const raw = localStorage.getItem(cacheKey);
         if (raw) {
@@ -300,6 +301,7 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
           fen: fenAfter,
           tone,
           engineData: engData,
+          perspective,
         }, apiKey);
         onPatchMoment?.(currentMoment.id, text, prompt);
       } else {
@@ -314,10 +316,11 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
           fen: fenAfter,
           tone,
           engineData: engData,
+          perspective,
         }, apiKey);
         setAnalysisText(text);
         setAnalysisPrompt(prompt);
-        const cacheKey = perMoveKey(gameId, plyIdx, tone);
+        const cacheKey = perMoveKey(gameId, plyIdx, tone, perspective);
         try { localStorage.setItem(cacheKey, JSON.stringify({ text, prompt, ts: Date.now() })); } catch {}
       }
     } catch {
@@ -368,7 +371,7 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
       };
 
       const { text: answer, systemPrompt } = await chatAboutPosition(
-        { summary, moment, messages: currentMsgs, question: q, tone, fen: fenCurrent, engineLine },
+        { summary, moment, messages: currentMsgs, question: q, tone, fen: fenCurrent, engineLine, perspective },
         apiKey
       );
       setChatHistory(prev => [...prev, { role: "assistant", text: answer, systemPrompt }]);
@@ -427,7 +430,7 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
             />
           </div>
           <div className="px-4 pb-4">
-            <EvalBar before={evals[plyIdx - 1] ?? 0} after={evals[plyIdx]} />
+            <EvalBar before={evals[plyIdx - 1] ?? 0} after={evals[plyIdx]} perspective={perspective} />
           </div>
         </div>
 

@@ -35,6 +35,7 @@ export function evalsKey(gameId) {
   return `kibitz-evals-${gameId}-${PROMPT_VERSION}-${DEFAULT_MODEL}`;
 }
 
-export function perMoveKey(gameId, ply, tone) {
-  return `kibitz-analysis-move-${gameId}-${ply}-${tone}-${PROMPT_VERSION}-${DEFAULT_MODEL}`;
+export function perMoveKey(gameId, ply, tone, perspective) {
+  const p = perspective ?? 'none';
+  return `kibitz-analysis-move-${gameId}-${ply}-${tone}-${p}-${PROMPT_VERSION}-${DEFAULT_MODEL}`;
 }

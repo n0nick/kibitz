@@ -159,7 +159,7 @@ function scrubResultExplanations(result, momentEngineData) {
 // Run Claude commentary on an already-evaluated game.
 // Pass engine to enable v1.2 engine-grounded prompt (pre-computes alternatives per moment).
 // promptBuilder: optional fn(pgn, moments, summary, evals, tone) => string override (skips engine path).
-export async function analyzeWithClaude(game, pgn, { apiKey, tone = 'beginner', model, promptBuilder, engine, engineDepth = 12 } = {}) {
+export async function analyzeWithClaude(game, pgn, { apiKey, tone = 'beginner', model, promptBuilder, engine, engineDepth = 12, perspective = null } = {}) {
   const key = apiKey
     ?? (typeof process !== 'undefined' ? process.env?.ANTHROPIC_API_KEY : null);
   if (!key) throw new Error('No Anthropic API key — set ANTHROPIC_API_KEY env var or pass apiKey');
@@ -170,7 +170,7 @@ export async function analyzeWithClaude(game, pgn, { apiKey, tone = 'beginner', 
   if (!effectivePromptBuilder && engine?.analyzePosition) {
     momentEngineData = await computeMomentEngineData(game, engine, { depth: engineDepth });
     effectivePromptBuilder = (pgn, moments, summary, evals, tone) =>
-      buildPrompt(pgn, moments, summary, evals, tone, { momentEngineData });
+      buildPrompt(pgn, moments, summary, evals, tone, { momentEngineData, perspective });
   }
 
   const { result, prompt } = await analyzeGameWithUsage(effectivePgn, game.moments, game.summary, game.evals, key, tone, model, effectivePromptBuilder);

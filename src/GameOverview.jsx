@@ -82,7 +82,7 @@ function OverviewCard({ summary, analysisStatus, pgn, gameId, promptSentToLlm })
 
 // ─── Turning point card ───────────────────────────────────────────────────────
 
-function TurningPointCard({ moment, position, evalBefore, evalAfter, flip, onDrillIn, desktop }) {
+function TurningPointCard({ moment, position, evalBefore, evalAfter, flip, onDrillIn, desktop, perspective }) {
   const boardSize = desktop ? "w-[300px] mx-auto" : "w-full";
   const teaser = moment.card_teaser ?? stripAnnotations(moment.explanation ?? '');
 
@@ -114,7 +114,7 @@ function TurningPointCard({ moment, position, evalBefore, evalAfter, flip, onDri
 
       {/* Eval swing */}
       <div className={`${desktop ? 'px-4 pb-3' : 'mb-3'}`}>
-        <EvalBar before={evalBefore} after={evalAfter} />
+        <EvalBar before={evalBefore} after={evalAfter} perspective={perspective} />
       </div>
 
       {/* Teaser text */}
@@ -274,6 +274,7 @@ export function GameOverview({
         messages: currentMsgs,
         question: q,
         tone,
+        perspective,
       }, apiKey);
       setGameChatHistory(prev => [...prev, { role: 'assistant', text }]);
     } catch {
@@ -373,6 +374,7 @@ export function GameOverview({
                 evalAfter={evals[moment.moveIdx]}
                 flip={flip}
                 onDrillIn={() => onDrillIn(moment.moveIdx)}
+                perspective={perspective}
               />
             </div>
           );
@@ -437,6 +439,7 @@ export function GameOverview({
                       flip={flip}
                       onDrillIn={() => onDrillIn(moment.moveIdx)}
                       desktop
+                      perspective={perspective}
                     />
                   );
                 })}
