@@ -5,7 +5,8 @@
 // classifications) without polluting the global Tailwind config.
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { kbzTokens, CLASS_DEF, sparklinePath } from "./design.js";
+import { kbzTokens, CLASS_DEF, sparklinePath, fmtEval, fmtEvalShort } from "./design.js";
+import { sanToSquares } from "./parseGame.js";
 
 // Module-level fallback token set — used by anything that reads tokens
 // outside a React component (rare) and by primitives that haven't been
@@ -395,8 +396,9 @@ export function NavBar({ title, subtitle, left, right }) {
 
 // ────────────────────────────────────────────────────────────────────────────
 // Composer — bottom-of-screen sticky text input used by both coach chats.
-// When `sticky` is true the composer floats above page content with a soft
-// gradient mask and an iOS-friendly safe-area inset.
+// When `sticky` is true the composer pins to the viewport bottom with a
+// tight 14px fade-in at its top edge (just enough to mask the seam without
+// veiling chat content) and an iOS-friendly safe-area inset.
 export function Composer({ value, onChange, onSend, placeholder, disabled, sticky = true }) {
   const { k } = useKbz();
   return (
@@ -406,7 +408,7 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, stick
         bottom: 0,
         padding: "10px 14px",
         paddingBottom: sticky ? "calc(10px + env(safe-area-inset-bottom, 0px))" : 10,
-        background: sticky ? `linear-gradient(to top, ${k.bg} 65%, ${k.bg}00)` : "transparent",
+        background: sticky ? `linear-gradient(to top, ${k.bg} calc(100% - 14px), ${k.bg}00)` : "transparent",
         zIndex: 5,
       }}
     >
@@ -653,7 +655,7 @@ export function ThemedBoard({
 // and a small swing readout coloured for the user's perspective.
 export function EvalBar({ before, after, perspective }) {
   const { k } = useKbz();
-  const fmt = (v) => v >= 99 ? "M" : v <= -99 ? "-M" : v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
+  const fmt = fmtEvalShort;
   const toPercent = (v) => v >= 99 ? 95 : v <= -99 ? 5 : ((Math.max(-6, Math.min(6, v)) + 6) / 12) * 100;
   const pct = toPercent(after);
   const isMateAfter = after >= 99;
@@ -683,6 +685,151 @@ export function EvalBar({ before, after, perspective }) {
 //
 // Shared by GameOverview (whole-game eval) and MoveAnalysisView (drill-in
 // swing visual). Both screens want the same affordances.
+// ────────────────────────────────────────────────────────────────────────────
+// Coach prose renderer — single component that handles every inline /
+// block-level affordance the LLM emits. Replaces three previous helpers
+// (AnnotatedText, RichText, ProseText) that had drifted in feature coverage.
+//
+//   text         — raw coach prose
+//   mode         — "inline" (default, single paragraph)
+//                   "rich"   (block-level: ### headings, - bullets)
+//   bold/italic  — `**bold**`, `*italic*` markers (on by default)
+//   swing        — `++positive++`, `~~cost~~` markers (off by default)
+//   mutedParens  — render parenthetical asides in muted color (off by default)
+//   onHover      — hover callback for [[annotation]] spans, fed { from, to }
+//   fenBefore/After — passed to sanToSquares to resolve SAN → from/to squares
+//
+// Backwards-compat aliases <AnnotatedText>, <RichText>, <ProseText> are
+// exported below so existing call sites keep working.
+
+export function stripAnnotations(text) {
+  if (!text) return text;
+  return text.replace(/\[\[([^\]|]*?)(?:\|[^\]]*?)?\]\]/g, "$1");
+}
+
+function parseAnnotation(raw, fenBefore, fenAfter) {
+  const sq = (s) => (/^[a-h][1-8]$/.test(s) ? s : null);
+  const pipeIdx = raw.indexOf("|");
+  if (pipeIdx !== -1) {
+    const display = raw.slice(0, pipeIdx);
+    const parts = raw.slice(pipeIdx + 1).split("-");
+    return { display, from: sq(parts[0]), to: sq(parts[1]) ?? null };
+  }
+  if (sq(raw)) return { display: raw, from: raw, to: null };
+  for (const fen of [fenBefore, fenAfter].filter(Boolean)) {
+    const result = sanToSquares(fen, raw);
+    if (result) return { display: raw, ...result };
+  }
+  return { display: raw, from: null, to: null };
+}
+
+export function Annotated({
+  text,
+  mode = "inline",
+  bold = true,
+  italic = true,
+  swing = false,
+  mutedParens = false,
+  onHover,
+  fenBefore,
+  fenAfter,
+}) {
+  const { k } = useKbz();
+  if (!text) return null;
+
+  // Build the splitter regex once based on enabled features.
+  const parts = [String.raw`\[\[[^\]]*\]\]`];
+  if (swing) {
+    parts.push(String.raw`\+\+[^+\n]+\+\+`);
+    parts.push(String.raw`~~[^~\n]+~~`);
+  }
+  if (bold) parts.push(String.raw`\*\*[^*\n]+\*\*`);
+  if (italic) parts.push(String.raw`\*[^*\n]+\*`);
+  const splitter = new RegExp(`(${parts.join("|")})`);
+
+  function renderInline(str) {
+    const tokens = str.split(splitter);
+    return tokens.map((tok, i) => {
+      if (!tok) return null;
+      if (tok.startsWith("[[") && tok.endsWith("]]")) {
+        const { display, from, to } = parseAnnotation(tok.slice(2, -2), fenBefore, fenAfter);
+        return (
+          <span
+            key={i}
+            style={{
+              color: k.text,
+              background: k.accentDim,
+              padding: "0 4px",
+              borderRadius: 3,
+              fontWeight: 500,
+              cursor: onHover ? "pointer" : undefined,
+            }}
+            onMouseEnter={onHover ? () => onHover({ from, to }) : undefined}
+            onMouseLeave={onHover ? () => onHover(null) : undefined}
+          >
+            {display}
+          </span>
+        );
+      }
+      if (swing && tok.startsWith("++") && tok.endsWith("++")) {
+        return (
+          <span key={i} style={{ background: k.accentDim, color: k.text, padding: "0 5px", borderRadius: 3 }}>
+            {tok.slice(2, -2)}
+          </span>
+        );
+      }
+      if (swing && tok.startsWith("~~") && tok.endsWith("~~")) {
+        return <span key={i} style={{ color: k.bad, fontWeight: 500 }}>{tok.slice(2, -2)}</span>;
+      }
+      if (bold && tok.startsWith("**") && tok.endsWith("**")) {
+        return <strong key={i} style={{ fontWeight: 600, color: k.text }}>{renderInline(tok.slice(2, -2))}</strong>;
+      }
+      if (italic && tok.startsWith("*") && tok.endsWith("*") && tok.length > 2) {
+        return <em key={i} style={{ fontStyle: "italic" }}>{renderInline(tok.slice(1, -1))}</em>;
+      }
+      // Plain text — optionally mute parenthetical asides.
+      if (mutedParens && tok.includes("(")) {
+        const subparts = tok.split(/(\([^)]*\))/g);
+        return subparts.map((p, j) =>
+          p.startsWith("(") && p.endsWith(")")
+            ? <span key={`${i}-${j}`} style={{ color: k.textMute }}>{p}</span>
+            : <span key={`${i}-${j}`}>{p}</span>
+        );
+      }
+      return <span key={i}>{tok}</span>;
+    });
+  }
+
+  if (mode !== "rich") return <>{renderInline(text)}</>;
+
+  // Block-level: headings (#/##/###), bullets (- ), paragraphs.
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {lines.map((line, i) => {
+        const heading = line.match(/^#{1,3}\s+(.+)/);
+        const bullet = line.match(/^[-*]\s+(.+)/);
+        if (heading) {
+          return (
+            <div key={i} className="kbz-caps" style={{ marginTop: i > 0 ? 4 : 0, color: k.textMute }}>
+              {renderInline(heading[1])}
+            </div>
+          );
+        }
+        if (bullet) {
+          return (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ color: k.accent, lineHeight: 1.5 }}>•</span>
+              <span style={{ flex: 1, lineHeight: 1.5 }}>{renderInline(bullet[1])}</span>
+            </div>
+          );
+        }
+        return <p key={i} style={{ margin: 0, lineHeight: 1.55 }}>{renderInline(line)}</p>;
+      })}
+    </div>
+  );
+}
+
 export function HoverSparkline({ data, markIdx = -1, h = 64, onClickIdx, showAxis = true }) {
   const { k } = useKbz();
   const ref = useRef(null);
@@ -715,7 +862,6 @@ export function HoverSparkline({ data, markIdx = -1, h = 64, onClickIdx, showAxi
 
   const displayIdx = hoverIdx ?? markIdx;
   const displayEv = displayIdx != null && displayIdx >= 0 && data && displayIdx < data.length ? data[displayIdx] : null;
-  const fmt = (v) => v >= 99 ? "+M" : v <= -99 ? "−M" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
   const moveNum = displayIdx != null && displayIdx > 0 ? Math.ceil(displayIdx / 2) : null;
   const side = displayIdx != null && displayIdx > 0 ? (displayIdx % 2 === 1 ? "w" : "b") : null;
 
@@ -751,7 +897,7 @@ export function HoverSparkline({ data, markIdx = -1, h = 64, onClickIdx, showAxi
             <span style={{ color: k.textMute }}>
               {moveNum != null ? `${moveNum}${side === "w" ? "." : "…"}` : "start"}
             </span>{" "}
-            <span style={{ color: displayEv >= 0 ? k.accent : k.bad }}>{fmt(displayEv)}</span>
+            <span style={{ color: displayEv >= 0 ? k.accent : k.bad }}>{fmtEval(displayEv)}</span>
           </span>
         </div>
       )}

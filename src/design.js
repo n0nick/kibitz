@@ -136,6 +136,47 @@ export function sparklinePath(evals, width, height, max = 6) {
   return evals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Eval formatters — single source of truth so we don't mix "-" and "−"
+// across files and so the "+M" / "−M" mate notation is consistent.
+//
+// fmtEval(+1.4)  → "+1.4"
+// fmtEval(-2.6)  → "−2.6"  (Unicode minus, not ASCII hyphen)
+// fmtEval(99)    → "+M"
+// fmtEval(-99)   → "−M"
+
+const MATE_HIGH = 99;
+const MATE_LOW = -99;
+
+export function fmtEval(v) {
+  if (v == null) return "?";
+  if (v >= MATE_HIGH) return "+M";
+  if (v <= MATE_LOW) return "−M";
+  const sign = v >= 0 ? "+" : "−";
+  return `${sign}${Math.abs(v).toFixed(1)}`;
+}
+
+// Short variant — drops the sign on positive values; used inside the
+// EvalBar where the bar position already encodes direction.
+export function fmtEvalShort(v) {
+  if (v == null) return "?";
+  if (v >= MATE_HIGH) return "M";
+  if (v <= MATE_LOW) return "-M";
+  return v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
+}
+
+// Swing from a perspective. Returns the user-facing magnitude with sign.
+// perspective: "white" | "black" | null. Without perspective, swing is
+// reported from White's POV (standard chess convention).
+export function fmtSwing(before, after, perspective) {
+  if (after >= MATE_HIGH) return "+M";
+  if (after <= MATE_LOW) return "−M";
+  const raw = (after ?? 0) - (before ?? 0);
+  const fromUser = perspective === "black" ? -raw : raw;
+  const sign = fromUser >= 0 ? "+" : "−";
+  return `${sign}${Math.min(Math.abs(fromUser), 9.9).toFixed(1)}`;
+}
+
 // Reasonable insight teaser based purely on evals — used when no LLM
 // narrative is available yet (eg. lichess game list cards).
 export function evalInsightText(evals) {
@@ -146,6 +187,5 @@ export function evalInsightText(evals) {
   const after = evals[idx] ?? 0;
   const moveNum = Math.ceil(idx / 2);
   const side = idx % 2 === 1 ? "White" : "Black";
-  const fmt = (v) => v >= 99 ? "+M" : v <= -99 ? "−M" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
-  return `Move ${moveNum} (${side}) swung ${fmt(before)} → ${fmt(after)}`;
+  return `Move ${moveNum} (${side}) swung ${fmtEval(before)} → ${fmtEval(after)}`;
 }

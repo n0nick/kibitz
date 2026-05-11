@@ -6,130 +6,38 @@ import { sanToSquares } from "./parseGame";
 import { FlagButton } from "./FlagButton";
 import { perMoveKey } from "./migrations";
 import { GameContext } from "./context";
+import { fmtSwing } from "./design";
 import {
   useKbz, Card, NavBar, Classification, ThemedBoard, EvalBar, HoverSparkline,
-  Composer, ExtLinkIcon, CLASS_DEF,
+  Composer, ExtLinkIcon, CLASS_DEF, Annotated, stripAnnotations,
 } from "./ui";
 
-// ─── Re-exports kept for backwards-compat with other modules ────────────────
-// (GameOverview imports CLS from here for its turning-point card.)
-export const CLS = {
-  brilliant:  { label: "Brilliant", icon: CLASS_DEF.brilliant.glyph,  bg: "transparent", text: "text-emerald-400", border: "transparent" },
-  great:      { label: "Great",     icon: CLASS_DEF.great.glyph,      bg: "transparent", text: "text-sky-400",     border: "transparent" },
-  good:       { label: "Good",      icon: CLASS_DEF.good.glyph,       bg: "transparent", text: "text-zinc-400",    border: "transparent" },
-  inaccuracy: { label: "Inaccuracy",icon: CLASS_DEF.inaccuracy.glyph, bg: "transparent", text: "text-yellow-400",  border: "transparent" },
-  mistake:    { label: "Mistake",   icon: CLASS_DEF.mistake.glyph,    bg: "transparent", text: "text-orange-400",  border: "transparent" },
-  blunder:    { label: "Blunder",   icon: CLASS_DEF.blunder.glyph,    bg: "transparent", text: "text-red-400",     border: "transparent" },
-};
-
-export function Chip({ classification }) {
-  return <Classification kind={classification} size={11} />;
-}
-
-export const Board = ThemedBoard;
-
-export function EvalBarLegacy(props) { return <EvalBar {...props} />; }
-
-// ─── Annotated text helpers ─────────────────────────────────────────────────
-
-function parseAnnotation(raw, fenBefore, fenAfter) {
-  const sq = (s) => (/^[a-h][1-8]$/.test(s) ? s : null);
-  const pipeIdx = raw.indexOf("|");
-  if (pipeIdx !== -1) {
-    const display = raw.slice(0, pipeIdx);
-    const parts = raw.slice(pipeIdx + 1).split("-");
-    return { display, from: sq(parts[0]), to: sq(parts[1]) ?? null };
-  }
-  const display = raw;
-  if (sq(raw)) return { display, from: raw, to: null };
-  for (const fen of [fenBefore, fenAfter].filter(Boolean)) {
-    const result = sanToSquares(fen, raw);
-    if (result) return { display, ...result };
-  }
-  return { display, from: null, to: null };
-}
-
+// Thin shims around <Annotated> so we can keep the local call sites
+// readable. AnnotatedText is the inline form used on the drill-in card;
+// RichText is the block-level form used inside chat bubbles.
 export function AnnotatedText({ text, onHover, fenBefore, fenAfter }) {
-  const { k } = useKbz();
-  if (!text) return null;
-  const parts = text.split(/(\[\[[^\]]*\]\])/);
-  return parts.map((part, i) => {
-    const match = part.match(/^\[\[([^\]]*)\]\]$/);
-    if (!match) return <span key={i}>{part}</span>;
-    const { display, from, to } = parseAnnotation(match[1], fenBefore, fenAfter);
-    return (
-      <span
-        key={i}
-        style={{
-          color: k.text,
-          background: k.accentDim,
-          padding: "0 4px",
-          borderRadius: 3,
-          fontWeight: 500,
-          cursor: "pointer",
-        }}
-        onMouseEnter={() => onHover?.({ from, to })}
-        onMouseLeave={() => onHover?.(null)}
-      >
-        {display}
-      </span>
-    );
-  });
+  return (
+    <Annotated
+      text={text}
+      mode="inline"
+      bold={false}
+      italic={false}
+      onHover={onHover}
+      fenBefore={fenBefore}
+      fenAfter={fenAfter}
+    />
+  );
 }
 
 function RichText({ text, onHover, fenBefore, fenAfter }) {
-  const { k } = useKbz();
-  if (!text) return null;
-  function renderInline(str) {
-    const tokens = str.split(/(\[\[[^\]]*\]\]|\*\*[^*]+\*\*|\*[^*]+\*)/);
-    return tokens.map((token, i) => {
-      if (!token) return null;
-      if (token.startsWith("[[") && token.endsWith("]]")) {
-        const { display, from, to } = parseAnnotation(token.slice(2, -2), fenBefore, fenAfter);
-        return (
-          <span
-            key={i}
-            style={{ color: k.text, background: k.accentDim, padding: "0 4px", borderRadius: 3, fontWeight: 500, cursor: "pointer" }}
-            onMouseEnter={() => onHover?.({ from, to })}
-            onMouseLeave={() => onHover?.(null)}
-          >
-            {display}
-          </span>
-        );
-      }
-      if (token.startsWith("**") && token.endsWith("**")) {
-        return <strong key={i} style={{ fontWeight: 600, color: k.text }}>{renderInline(token.slice(2, -2))}</strong>;
-      }
-      if (token.startsWith("*") && token.endsWith("*") && token.length > 2) {
-        return <em key={i} style={{ fontStyle: "italic" }}>{renderInline(token.slice(1, -1))}</em>;
-      }
-      return <span key={i}>{token}</span>;
-    });
-  }
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {lines.map((line, i) => {
-        const heading = line.match(/^#{1,3}\s+(.+)/);
-        const bullet = line.match(/^[-*]\s+(.+)/);
-        if (heading) {
-          return (
-            <div key={i} className="kbz-caps" style={{ marginTop: i > 0 ? 4 : 0, color: k.textMute }}>
-              {renderInline(heading[1])}
-            </div>
-          );
-        }
-        if (bullet) {
-          return (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <span style={{ color: k.accent, lineHeight: 1.5 }}>•</span>
-              <span style={{ flex: 1, lineHeight: 1.5 }}>{renderInline(bullet[1])}</span>
-            </div>
-          );
-        }
-        return <p key={i} style={{ margin: 0, lineHeight: 1.55 }}>{renderInline(line)}</p>;
-      })}
-    </div>
+    <Annotated
+      text={text}
+      mode="rich"
+      onHover={onHover}
+      fenBefore={fenBefore}
+      fenAfter={fenAfter}
+    />
   );
 }
 
@@ -142,11 +50,6 @@ function gameSource(id) {
 }
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-
-function stripAnnotations(text) {
-  if (!text) return text;
-  return text.replace(/\[\[([^\]|]*?)(?:\|[^\]]*?)?\]\]/g, "$1");
-}
 
 // First sentence of the explanation — promoted to an editorial headline.
 function firstSentence(text) {
@@ -167,16 +70,8 @@ function deconjunct(text) {
   );
 }
 
-// Format the eval swing readout shown next to the sparkline header.
-function fmtSwing(before, after, perspective) {
-  if (after >= 99) return "+M";
-  if (after <= -99) return "−M";
-  const raw = after - before;
-  const fromUser = perspective === "black" ? -raw : raw;
-  const sign = fromUser >= 0 ? "+" : "−";
-  return `${sign}${Math.min(Math.abs(fromUser), 9.9).toFixed(1)}`;
-}
-
+// Color the swing readout based on whether the eval moved in the user's
+// favour. `kk` is the active design tokens.
 function swingColor(before, after, perspective, kk) {
   if (after >= 99 || after <= -99) return after >= 99 ? kk.accent : kk.bad;
   const raw = after - before;
@@ -260,7 +155,6 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const chatEndRef = useRef(null);
-  const scrollerRef = useRef(null);
 
   const flip = perspective === "black";
   const fenBefore = positions[plyIdx - 1]?.fen;
@@ -415,7 +309,14 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
   const classification = currentMoment?.classification ?? "good";
   const cdef = CLASS_DEF[classification] ?? CLASS_DEF.good;
   const suggestedQ = currentMoment?.qa?.question;
+  // If the moment doesn't carry an explicit `headline` (older cache /
+  // first ply analysis), fall back to the first sentence of the explanation
+  // — and drop that sentence from the body so we don't show it twice.
+  const hasModelHeadline = !!currentMoment?.headline;
   const headline = currentMoment?.headline ?? firstSentence(explanation);
+  const bodyExplanation = hasModelHeadline
+    ? explanation
+    : (explanation && headline ? explanation.replace(headline, "").trim() : explanation);
 
   if (!currentPos) return null;
 
@@ -427,7 +328,6 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
 
   return (
     <div
-      ref={scrollerRef}
       style={{
         minHeight: "100vh", background: k.bg, color: k.text,
         fontFamily: k.font.sans, paddingBottom: 96,
@@ -562,13 +462,15 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
             </div>
             <HoverSparkline data={evals} markIdx={plyIdx} h={56} onClickIdx={setPlyIdx} />
 
-            {/* Coach's read — soft paragraph below the sparkline */}
-            {(explanation || loading || analysisStatus === "loading" || (!apiKey && !explanation)) && (
+            {/* Coach's read — soft paragraph below the sparkline. Hidden
+                when the headline already covers the entire explanation
+                (so we don't render a stale empty paragraph). */}
+            {(bodyExplanation || loading || analysisStatus === "loading" || (!apiKey && !explanation)) && (
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${k.hairline}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <span className="kbz-caps">Coach's read</span>
                   <span style={{ flex: 1 }} />
-                  {explanation && (
+                  {bodyExplanation && (
                     <FlagButton context={{
                       type: "moment", model: DEFAULT_MODEL, promptVersion: PROMPT_VERSION,
                       gameId, pgn, promptSentToLlm: promptForFlag,
@@ -579,9 +481,14 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
                     }} />
                   )}
                 </div>
-                {explanation ? (
+                {bodyExplanation ? (
                   <div style={{ fontSize: 13, color: k.textMute, lineHeight: 1.55 }}>
-                    <AnnotatedText text={deconjunct(explanation)} onHover={setHoverHighlight} fenBefore={fenBefore} fenAfter={fenAfter} />
+                    <AnnotatedText
+                      text={hasModelHeadline ? bodyExplanation : deconjunct(bodyExplanation)}
+                      onHover={setHoverHighlight}
+                      fenBefore={fenBefore}
+                      fenAfter={fenAfter}
+                    />
                   </div>
                 ) : loading || analysisStatus === "loading" ? (
                   <div style={{ fontSize: 13, color: k.textDim, fontStyle: "italic", animation: "kbz-pulse 1.4s ease-in-out infinite" }}>

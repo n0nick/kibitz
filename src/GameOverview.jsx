@@ -3,89 +3,14 @@ import { chatAboutGame, selectMoments, MAX_OVERVIEW_MOMENTS, DEFAULT_MODEL, PROM
 import { FlagButton } from "./FlagButton";
 import {
   useKbz, Card, Section, Editorial, NavBar, HoverSparkline, Classification, ThemedBoard,
-  MoveTag, Composer,
+  MoveTag, Composer, Annotated, stripAnnotations,
 } from "./ui";
-import { biggestSwingIdx } from "./design";
+import { biggestSwingIdx, fmtEval } from "./design";
 
-// ─── Annotation strippers — coach prose still uses [[piece|sq]] markup. ──────
-
-function stripAnnotations(text) {
-  if (!text) return text;
-  // [[display|...]] → display, [[display]] → display (square refs / move refs)
-  return text.replace(/\[\[([^\]|]*?)(?:\|[^\]]*?)?\]\]/g, "$1");
-}
-
-// Renders coach prose inline. Supports four lightweight markers that mirror
-// the editorial spec from the design canvas:
-//   ++text++     — positive emphasis (soft accent highlight)
-//   ~~text~~     — cost / negative framing (alert color, semibold)
-//   (text)       — automatically muted by `mutedParens` mode
-//   **text**     — bold (used by the chat coach, less common in narratives)
-//   *text*       — italic (likewise)
-//   [[disp|to]]  — board annotation
+// Editorial prose with the full marker set (bold, italic, ++pos++,
+// ~~cost~~, [[annotation]], muted parens). Thin alias over <Annotated>.
 function ProseText({ text, mutedParens = false }) {
-  const { k } = useKbz();
-  if (!text) return null;
-  const splitter = /(\[\[[^\]]*\]\]|\+\+[^+\n]+\+\+|~~[^~\n]+~~|\*\*[^*\n]+\*\*|\*[^*\n]+\*)/;
-  const tokens = text.split(splitter);
-  return tokens.map((tok, i) => {
-    if (!tok) return null;
-    if (tok.startsWith("[[") && tok.endsWith("]]")) {
-      const display = tok.slice(2, -2).split("|")[0];
-      return (
-        <span
-          key={i}
-          style={{
-            background: k.accentDim,
-            color: k.text,
-            padding: "0 4px",
-            borderRadius: 3,
-            fontWeight: 500,
-          }}
-        >
-          {display}
-        </span>
-      );
-    }
-    if (tok.startsWith("++") && tok.endsWith("++")) {
-      return (
-        <span
-          key={i}
-          style={{
-            background: k.accentDim,
-            color: k.text,
-            padding: "0 5px",
-            borderRadius: 3,
-          }}
-        >
-          {tok.slice(2, -2)}
-        </span>
-      );
-    }
-    if (tok.startsWith("~~") && tok.endsWith("~~")) {
-      return (
-        <span key={i} style={{ color: k.bad, fontWeight: 500 }}>
-          {tok.slice(2, -2)}
-        </span>
-      );
-    }
-    if (tok.startsWith("**") && tok.endsWith("**")) {
-      return <strong key={i} style={{ fontWeight: 600, color: k.text }}>{tok.slice(2, -2)}</strong>;
-    }
-    if (tok.startsWith("*") && tok.endsWith("*") && tok.length > 2) {
-      return <em key={i} style={{ fontStyle: "italic" }}>{tok.slice(1, -1)}</em>;
-    }
-    // Plain text — optionally mute parenthetical asides for the narrative spec.
-    if (mutedParens && tok.includes("(")) {
-      const parts = tok.split(/(\([^)]*\))/g);
-      return parts.map((p, j) =>
-        p.startsWith("(") && p.endsWith(")")
-          ? <span key={`${i}-${j}`} style={{ color: k.textMute }}>{p}</span>
-          : <span key={`${i}-${j}`}>{p}</span>
-      );
-    }
-    return <span key={i}>{tok}</span>;
-  });
+  return <Annotated text={text} mode="inline" swing mutedParens={mutedParens} />;
 }
 
 // ─── Perspective prompt — modal overlay on first load ───────────────────────
@@ -180,7 +105,6 @@ function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClic
     : moment.classification === "mistake"
     ? k.warn
     : k.textMute;
-  const fmt = (v) => v >= 99 ? "+M" : v <= -99 ? "−M" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
   return (
     <Card pad={14} onClick={onClick}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
@@ -215,12 +139,12 @@ function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClic
         </div>
       </div>
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${k.hairline}`, display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontFamily: k.font.mono, fontSize: 12, color: k.textMute }}>{fmt(evalBefore)}</span>
+        <span style={{ fontFamily: k.font.mono, fontSize: 12, color: k.textMute }}>{fmtEval(evalBefore)}</span>
         <svg width="40" height="10" viewBox="0 0 40 10">
           <path d="M2 5 L32 5" stroke={k.textDim} strokeWidth="1" />
           <path d="M28 1 L36 5 L28 9" fill="none" stroke={k.textDim} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <span style={{ fontFamily: k.font.mono, fontSize: 12, color: swingColor }}>{fmt(evalAfter)}</span>
+        <span style={{ fontFamily: k.font.mono, fontSize: 12, color: swingColor }}>{fmtEval(evalAfter)}</span>
         <span style={{ flex: 1 }} />
         <span style={{ fontSize: 12, color: k.accent, fontWeight: 600 }}>Drill in ›</span>
       </div>
@@ -245,7 +169,9 @@ export function GameOverview({
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [gameChatHistory]);
 
   const flip = perspective === "black";
-  const turningIdx = moments[0]?.moveIdx ?? biggestSwingIdx(evals);
+  // Anchor the overview sparkline at the most significant swing (which is
+  // usually but not always the first-by-move turning point in `moments`).
+  const turningIdx = biggestSwingIdx(evals);
   const flagCtx = { type: "game-overview", model: DEFAULT_MODEL, promptVersion: PROMPT_VERSION, gameId, pgn, promptSentToLlm };
   const loading = analysisStatus === "loading";
 
