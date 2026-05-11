@@ -7,7 +7,7 @@ import { FlagButton } from "./FlagButton";
 import { perMoveKey } from "./migrations";
 import { GameContext } from "./context";
 import {
-  k, Card, NavBar, Classification, ThemedBoard, EvalBar, Sparkline,
+  k, Card, NavBar, Classification, ThemedBoard, EvalBar, HoverSparkline,
   Composer, ExtLinkIcon, CLASS_DEF,
 } from "./ui";
 
@@ -182,25 +182,6 @@ function swingColor(before, after, perspective, kk) {
   return fromUser >= 0 ? kk.accent : kk.bad;
 }
 
-// Resize-observed sparkline wrapper, so the SVG width fits the parent card.
-function SparklineFit({ data, markIdx, h }) {
-  const ref = useRef(null);
-  const [w, setW] = useState(320);
-  useEffect(() => {
-    if (!ref.current) return;
-    const ro = new ResizeObserver((entries) => {
-      const cw = entries[0].contentRect.width;
-      if (cw > 0) setW(cw);
-    });
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, []);
-  return (
-    <div ref={ref}>
-      <Sparkline data={data} markIdx={markIdx} w={w} h={h} />
-    </div>
-  );
-}
 
 // Renders one alt continuation as inline mono notation plus a one-line
 // rationale. Tap header to cycle through betterMoves when there's more than one.
@@ -572,7 +553,7 @@ export function MoveAnalysisView({ initialPly, gameId, apiKey, tone, perspective
                 {fmtSwing(evals[plyIdx - 1] ?? 0, evals[plyIdx], perspective)}
               </span>
             </div>
-            <SparklineFit data={evals} markIdx={plyIdx} h={56} />
+            <HoverSparkline data={evals} markIdx={plyIdx} h={56} onClickIdx={setPlyIdx} />
 
             {/* Coach's read — soft paragraph below the sparkline */}
             {(explanation || loading || analysisStatus === "loading" || (!apiKey && !explanation)) && (

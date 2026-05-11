@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { chatAboutGame, selectMoments, MAX_OVERVIEW_MOMENTS, DEFAULT_MODEL, PROMPT_VERSION } from "./analyzeGame";
 import { FlagButton } from "./FlagButton";
 import {
-  k, Card, Section, Editorial, NavBar, Sparkline, Classification, ThemedBoard,
+  k, Card, Section, Editorial, NavBar, HoverSparkline, Classification, ThemedBoard,
   MoveTag, Composer,
 } from "./ui";
 import { biggestSwingIdx } from "./design";
@@ -390,7 +390,7 @@ export function GameOverview({
                 </button>
               )}
             </div>
-            <SparklineFit data={evals} markIdx={turningIdx} h={68} onClickIdx={onDrillIn} />
+            <HoverSparkline data={evals} markIdx={turningIdx} h={68} onClickIdx={onDrillIn} />
           </div>
         )}
 
@@ -553,90 +553,3 @@ export function GameOverview({
   );
 }
 
-// Wrapper that measures container width, feeds it to the sparkline, and
-// tracks pointer position to show the eval value + ply at the cursor.
-function SparklineFit({ data, markIdx, h, onClickIdx }) {
-  const ref = useRef(null);
-  const [w, setW] = useState(360);
-  const [hoverIdx, setHoverIdx] = useState(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    const ro = new ResizeObserver((entries) => {
-      const cw = entries[0].contentRect.width;
-      if (cw > 0) setW(cw);
-    });
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, []);
-
-  const idxFromEvent = (e) => {
-    if (!ref.current || !data || data.length < 2) return null;
-    const rect = ref.current.getBoundingClientRect();
-    const cx = (e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX) - rect.left;
-    const rel = Math.max(0, Math.min(1, cx / Math.max(1, rect.width)));
-    return Math.round(rel * (data.length - 1));
-  };
-  const onMove = (e) => { const idx = idxFromEvent(e); if (idx != null) setHoverIdx(idx); };
-  const onLeave = () => setHoverIdx(null);
-  const onClick = (e) => {
-    if (!onClickIdx) return;
-    const idx = idxFromEvent(e);
-    if (idx != null && idx > 0) onClickIdx(idx);
-  };
-
-  const displayIdx = hoverIdx ?? markIdx;
-  const displayEv = displayIdx != null && displayIdx >= 0 && displayIdx < data.length ? data[displayIdx] : null;
-  const fmt = (v) => v >= 99 ? "+M" : v <= -99 ? "−M" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
-  const moveNum = displayIdx != null && displayIdx > 0 ? Math.ceil(displayIdx / 2) : null;
-  const side = displayIdx != null && displayIdx > 0 ? (displayIdx % 2 === 1 ? "w" : "b") : null;
-
-  return (
-    <div style={{ position: "relative" }}>
-      {/* Hover readout */}
-      {hoverIdx != null && displayEv != null && (
-        <div
-          style={{
-            position: "absolute",
-            top: -28,
-            left: 0,
-            right: 0,
-            display: "flex",
-            justifyContent: "center",
-            pointerEvents: "none",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: k.font.mono,
-              fontSize: 11,
-              padding: "3px 8px",
-              borderRadius: 6,
-              background: k.surface,
-              color: k.text,
-              border: `1px solid ${k.hairline}`,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-            }}
-          >
-            <span style={{ color: k.textMute }}>
-              {moveNum != null ? `${moveNum}${side === "w" ? "." : "…"}` : "start"}
-            </span>{" "}
-            <span style={{ color: displayEv >= 0 ? k.accent : k.bad }}>{fmt(displayEv)}</span>
-          </span>
-        </div>
-      )}
-      <div
-        ref={ref}
-        onMouseMove={onMove}
-        onMouseLeave={onLeave}
-        onTouchStart={onMove}
-        onTouchMove={onMove}
-        onTouchEnd={(e) => { onClick(e); onLeave(); }}
-        onClick={onClick}
-        style={{ cursor: onClickIdx ? "pointer" : "crosshair", touchAction: "none" }}
-        title={onClickIdx ? "Tap to drill into this ply" : undefined}
-      >
-        <Sparkline data={data} markIdx={hoverIdx ?? markIdx} w={w} h={h} />
-      </div>
-    </div>
-  );
-}
