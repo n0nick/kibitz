@@ -465,7 +465,7 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, stick
             lineHeight: 1.4,
             padding: "5px 0",
             maxHeight: 150,
-            overflowY: "auto",
+            overflow: "hidden",
           }}
         />
         <button

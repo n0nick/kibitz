@@ -267,7 +267,12 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
     setChatSending(true);
     if (override == null) setChatInput("");
     const currentMsgs = [...chatHistory];
-    setChatHistory((prev) => [...prev, { role: "user", text: q }]);
+    const userMsg = { role: "user", text: q };
+    setChatHistory((prev) => {
+      const next = [...prev, userMsg];
+      try { sessionStorage.setItem(saveKey, JSON.stringify(next)); } catch {}
+      return next;
+    });
     try {
       const fenCurrent = fenAfter ?? fenBefore;
       let engData = richEngData;
@@ -550,7 +555,7 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
         {/* Coach prompt seed card */}
         {apiKey && chatHistory.length === 0 && suggestedQ && (
           <div style={{ padding: "12px 16px 0" }}>
-            <Card pad={14}>
+            <Card pad={14} onClick={() => setChatInput(stripAnnotations(suggestedQ))} style={{ cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div
                   style={{
@@ -563,10 +568,10 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
                   ✦
                 </div>
                 <div style={{ flex: 1, fontSize: 13, color: k.text }}>
-                  {suggestedQ}
+                  {stripAnnotations(suggestedQ)}
                 </div>
                 <button
-                  onClick={() => sendChat(suggestedQ)}
+                  onClick={(e) => { e.stopPropagation(); const q = stripAnnotations(suggestedQ); setChatInput(q); sendChat(q); setChatInput(""); }}
                   disabled={chatSending}
                   style={{ background: "transparent", border: "none", color: k.accent, fontSize: 12, fontWeight: 600, cursor: chatSending ? "default" : "pointer", opacity: chatSending ? 0.5 : 1 }}
                 >
