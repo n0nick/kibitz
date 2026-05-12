@@ -71,12 +71,16 @@ Three tones for AI commentary, set per session in Settings:
 
 ## Cost
 
-Uses `claude-haiku-4-5` for all AI calls. Typical cost:
-- Full game analysis: ~$0.01
-- Chat message: ~$0.001–0.002
-- ~$0.025 per typical session (analysis + ~10 chat messages)
+Uses `claude-haiku-4-5` for all AI calls. Approximate per-call size & cost:
 
-Stockfish analysis is free (runs locally in WASM).
+| Call | Input prompt | Output | Cost |
+| --- | --- | --- | --- |
+| Full-game analysis (5–12 moments) | ~2.3k tokens | ~0.8–1.5k tokens | ~$0.01 |
+| Move drill-in (single position) | ~0.6k tokens | ~0.2–0.4k tokens | ~$0.002 |
+| Move chat (per turn) | ~0.7k tokens | ~0.1–0.3k tokens | ~$0.001–0.002 |
+| Game chat (per turn) | ~0.6k tokens + PGN | ~0.1–0.3k tokens | ~$0.001–0.002 |
+
+A typical session (one full-game analysis + drilling into 2–3 moments + ~10 chat turns) lands around **$0.025**. Stockfish analysis is free — runs locally in WASM.
 
 ## Roadmap
 
