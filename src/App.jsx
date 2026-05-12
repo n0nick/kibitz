@@ -51,6 +51,23 @@ export default function App() {
   // Run cache migrations on startup
   useEffect(() => { runMigrations(); }, []);
 
+  // Dynamic page title
+  useEffect(() => {
+    const game = gameData?.summary;
+    const players = game ? `${game.white} vs ${game.black}` : null;
+    if (screen === "overview" && players) {
+      document.title = `${players} — Kibitz`;
+    } else if (screen === "drill-in" && players) {
+      const ply = drillInPly;
+      const move = ply != null ? ` · Move ${Math.ceil(ply / 2)}` : '';
+      document.title = `${players}${move} — Kibitz`;
+    } else if (screen === "loading") {
+      document.title = `Analyzing… — Kibitz`;
+    } else {
+      document.title = `Kibitz`;
+    }
+  }, [screen, gameData?.summary, drillInPly]);
+
   // Perspective inference: runs whenever a game is loaded
   useEffect(() => {
     if (!gameData?.summary || !gameId) return;
