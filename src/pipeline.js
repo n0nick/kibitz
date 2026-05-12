@@ -39,6 +39,28 @@ export async function analyzePositions(parsed, engine, { signal, onProgress } = 
   return reclassifyWithEvals(parsed, evals);
 }
 
+// Computes which squares the moved piece can reach after landing, using chess.js.
+// We swap the active color in fenAfter so legal moves are returned for the piece
+// that just moved — this gives the LLM factual geometry to cite instead of guessing.
+function computeMovedPieceTargets(fenBefore, moveSan, fenAfter) {
+  if (!fenBefore || !moveSan || !fenAfter) return null;
+  try {
+    const before = new Chess(fenBefore);
+    const move = before.move(moveSan);
+    if (!move) return null;
+
+    const parts = fenAfter.split(' ');
+    parts[1] = parts[1] === 'w' ? 'b' : 'w';
+    parts[3] = '-'; // clear en passant to keep position valid after color swap
+    const after = new Chess(parts.join(' '));
+    const targets = after.moves({ square: move.to, verbose: true }).map(m => m.to);
+
+    return { piece: move.piece, from: move.from, to: move.to, targets };
+  } catch {
+    return null;
+  }
+}
+
 // Pre-computes before-move engine alternatives for each selected moment.
 // engine must implement analyzePosition(fen, depth, numPv) => Promise<Line[]|null>.
 // Returns a momentEngineData map keyed by moveIdx for use in buildPrompt v1.2.
@@ -66,6 +88,7 @@ export async function computeMomentEngineData(game, engine, { depth = 12 } = {})
         pv_san: l.pv?.slice(0, 5) ?? [],
       })),
       refutation_pv: refLines?.[0]?.pv?.slice(0, 5) ?? [],
+      moved_piece_targets: computeMovedPieceTargets(fenBefore, m.notation, fenAfter),
     };
   }
   return momentEngineData;

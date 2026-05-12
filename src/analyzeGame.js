@@ -2,11 +2,10 @@ import { Chess } from 'chess.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-// v1.8 — perspective rule allows opponent color references again (user
-// stays strictly "you"), and reframes suggestedQuestion so it reads as
-// the user asking the coach in first person, never the coach quizzing
-// the user.
-export const PROMPT_VERSION = "v1.8";
+// v1.9 — inject moved-piece geometry (reachable squares) into each moment
+// entry so the LLM cannot hallucinate piece-attack claims (e.g. "Nb4
+// attacks b5") that contradict the actual board geometry.
+export const PROMPT_VERSION = "v1.9";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -155,6 +154,14 @@ export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = []) 
         entry += `\n    ${i + 1}. ${l.moves_san.slice(0, 4).join(' ')} (${ev})`;
       });
     }
+  }
+
+  const mpt = engineData?.moved_piece_targets;
+  if (mpt) {
+    const PIECE_NAMES = { n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King', p: 'Pawn' };
+    const name = PIECE_NAMES[mpt.piece] ?? mpt.piece.toUpperCase();
+    const reachable = mpt.targets.length > 0 ? mpt.targets.sort().join(', ') : 'none';
+    entry += `\n  Moved piece geometry: ${name} (${mpt.from}→${mpt.to}) can reach from ${mpt.to}: ${reachable}`;
   }
 
   return entry;
