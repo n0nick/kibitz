@@ -8,7 +8,9 @@ const ICON_CHECK = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="1
 export default function ReportViewer() {
   const { k } = useKbz();
   const [html, setHtml] = useState(null);
+  const [markdown, setMarkdown] = useState(null);
   const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
   const bodyRef = useRef(null);
 
   useEffect(() => {
@@ -18,9 +20,16 @@ export default function ReportViewer() {
 
     fetch(`/api/report/${encodeURIComponent(id)}`)
       .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.text(); })
-      .then(md => setHtml(marked.parse(md)))
+      .then(md => { setMarkdown(md); setHtml(marked.parse(md)); })
       .catch(e => setError(`Failed to load report: ${e.message}`));
   }, []);
+
+  const handleCopyMarkdown = async () => {
+    if (!markdown) return;
+    await navigator.clipboard.writeText(markdown);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   useEffect(() => {
     if (!html || !bodyRef.current) return;
@@ -66,6 +75,24 @@ export default function ReportViewer() {
           </a>
           <span style={{ color: k.textDim }}>|</span>
           <span className="kbz-caps" style={{ fontSize: 11 }}>Bug report</span>
+          {html && (
+            <>
+              <span style={{ color: k.textDim }}>|</span>
+              <button
+                onClick={handleCopyMarkdown}
+                title="Copy markdown"
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  background: "none", border: "none", cursor: "pointer",
+                  color: copied ? k.good : k.textMute, fontSize: 12,
+                  padding: 0, fontFamily: k.font.sans,
+                }}
+              >
+                <span dangerouslySetInnerHTML={{ __html: copied ? ICON_CHECK : ICON_COPY }} />
+                {copied ? 'Copied!' : 'Copy markdown'}
+              </button>
+            </>
+          )}
         </div>
 
         {error && (
