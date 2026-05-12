@@ -122,14 +122,16 @@ Frame eval swings from your perspective: when the eval moves in your favour, cal
 
 // Formats one moment entry for the prompt, including engine alternatives and
 // refutation when momentEngineData is provided (v1.2 architecture).
-export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = []) {
+export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = [], perspective = null) {
   const fmt = v => v >= 99 ? 'M' : v <= -99 ? '-M' : v.toFixed(1);
   const before = evals[m.moveIdx - 1] ?? 0;
   const after = evals[m.moveIdx];
   const delta = after - before;
   const side = m.player === 'white' ? 'White' : 'Black';
+  const moverIsUser = perspective && perspective === m.player;
+  const moverLabel = perspective ? `, played by: ${moverIsUser ? 'YOU' : 'YOUR OPPONENT'}` : '';
 
-  let entry = `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}) [${side}]: ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? '+' : ''}${delta.toFixed(1)})`;
+  let entry = `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}) [${side}${moverLabel}]: ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? '+' : ''}${delta.toFixed(1)})`;
 
   const engineData = momentEngineData[m.moveIdx];
 
@@ -195,12 +197,14 @@ export function buildPrompt(pgn, moments, summary, evals, tone, { perPly = [], p
   const topMoments = selectMoments(moments, evals);
 
   const momentsList = topMoments.map(m => {
-    if (hasEngineData) return formatMomentEntry(m, evals, momentEngineData, perPly);
+    if (hasEngineData) return formatMomentEntry(m, evals, momentEngineData, perPly, perspective);
     const fmt = v => v >= 99 ? 'M' : v <= -99 ? '-M' : v.toFixed(1);
     const before = evals[m.moveIdx - 1] ?? 0;
     const after = evals[m.moveIdx];
     const delta = after - before;
-    return `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}): ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? "+" : ""}${delta.toFixed(1)})`;
+    const moverIsUser = perspective && perspective === m.player;
+    const moverLabel = perspective ? `, played by: ${moverIsUser ? 'YOU' : 'YOUR OPPONENT'}` : '';
+    return `- moveIdx ${m.moveIdx} (${m.moveNumber} ${m.notation}) [${m.player === 'white' ? 'White' : 'Black'}${moverLabel}]: ${m.classification}, eval ${fmt(before)} → ${fmt(after)} (${delta >= 0 ? "+" : ""}${delta.toFixed(1)})`;
   }).join("\n");
 
   const perspLine = perspectiveInstruction(perspective);
@@ -209,7 +213,7 @@ export function buildPrompt(pgn, moments, summary, evals, tone, { perPly = [], p
     : (perspLine ? `${perspLine}\n\n` : "");
 
   const evalHeader = hasEngineData
-    ? "Key moments (eval in pawns, positive = White advantage; each entry names the side that just moved):"
+    ? `Key moments (eval in pawns, positive = White advantage; each entry names the side that just moved${perspective ? ' and whether it was played by YOU or YOUR OPPONENT' : ''}):`
     : "Key moments (eval in pawns, positive = white advantage):";
 
   const betterMovesRule = hasEngineData
