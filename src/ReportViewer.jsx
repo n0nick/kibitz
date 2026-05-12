@@ -14,6 +14,7 @@ export default function ReportViewer() {
   const bodyRef = useRef(null);
 
   useEffect(() => {
+    document.title = 'Flag Report · Kibitz';
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
     if (!id) { setError('No report ID provided.'); return; }

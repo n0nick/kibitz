@@ -53,6 +53,7 @@ export default function App() {
 
   // Dynamic page title
   useEffect(() => {
+    if (window.location.pathname === '/report') return;
     const game = gameData?.summary;
     const players = game ? `${game.white} vs ${game.black}` : null;
     if (screen === "overview" && players) {
