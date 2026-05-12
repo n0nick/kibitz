@@ -1,11 +1,13 @@
 import { Chess } from 'chess.js';
+import { fmtMate } from './design.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-// v1.9 — inject moved-piece geometry (reachable squares) into each moment
-// entry so the LLM cannot hallucinate piece-attack claims (e.g. "Nb4
-// attacks b5") that contradict the actual board geometry.
-export const PROMPT_VERSION = "v1.9";
+// v1.10 — preserve mate distance in engine output: +M / -M become +Mn /
+// -Mn so the LLM can distinguish mate-in-1 from mate-in-3 (previously
+// collapsed to identical `+M` strings, leading to "you had mate in two"
+// when the engine actually saw mate-in-1).
+export const PROMPT_VERSION = "v1.10";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -136,10 +138,10 @@ export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = [], 
   const engineData = momentEngineData[m.moveIdx];
 
   if (engineData?.top_alternatives?.length > 0) {
-    entry += '\n  Engine alternatives (what to play instead):';
+    entry += '\n  Engine alternatives (what to play instead; eval in pawns; +Mn = forced mate in n half-moves, lower n is faster):';
     engineData.top_alternatives.forEach((alt, i) => {
       if (!alt.san) return;
-      const ev = alt.mate != null ? (alt.mate > 0 ? '+M' : '-M') : fmtCp(alt.eval_cp);
+      const ev = alt.mate != null ? fmtMate(alt.mate) : fmtCp(alt.eval_cp);
       const pv = alt.pv_san?.slice(1, 4).join(' ');
       entry += `\n    ${i + 1}. ${alt.san} (${ev})${pv ? ` — continuation: ${pv}` : ''}`;
     });
@@ -153,7 +155,7 @@ export function formatMomentEntry(m, evals, momentEngineData = {}, perPly = [], 
     if (engineLines.length > 0) {
       entry += '\n  Engine lines after move:';
       engineLines.forEach((l, i) => {
-        const ev = l.mate != null ? (l.mate > 0 ? '+M' : '-M') : fmtCp(l.eval_cp);
+        const ev = l.mate != null ? fmtMate(l.mate) : fmtCp(l.eval_cp);
         entry += `\n    ${i + 1}. ${l.moves_san.slice(0, 4).join(' ')} (${ev})`;
       });
     }
@@ -318,10 +320,10 @@ export async function analyzeSinglePosition({ summary, moveNumber, notation, cla
 
   let engineSection = '';
   if (engineData?.top_alternatives?.length > 0) {
-    engineSection += `\nEngine alternatives — moves ${moverLabel} (${moverColor}) could have played INSTEAD of ${notation} (these apply to the position BEFORE the move):`;
+    engineSection += `\nEngine alternatives — moves ${moverLabel} (${moverColor}) could have played INSTEAD of ${notation} (these apply to the position BEFORE the move; eval in pawns, +Mn = forced mate in n half-moves):`;
     engineData.top_alternatives.forEach((alt, i) => {
       if (!alt.san) return;
-      const ev = alt.mate != null ? (alt.mate > 0 ? '+M' : '-M') : fmtCp(alt.eval_cp);
+      const ev = alt.mate != null ? fmtMate(alt.mate) : fmtCp(alt.eval_cp);
       const pv = alt.pv_san?.slice(1, 4).join(' ');
       engineSection += `\n  ${i + 1}. ${alt.san} (${ev})${pv ? ` — continuation: ${pv}` : ''}`;
     });

@@ -177,6 +177,16 @@ export function fmtSwing(before, after, perspective) {
   return `${sign}${Math.min(Math.abs(fromUser), 9.9).toFixed(1)}`;
 }
 
+// Format a raw engine mate distance — eg. +1, -3 — as `+M1` / `-M3`.
+// Used in prompt-side engine data passed to the LLM, where preserving
+// the mate distance lets the coach distinguish a forced mate-in-1 from
+// the slower mate-in-3 alternative.
+export function fmtMate(mate) {
+  if (mate == null) return null;
+  const sign = mate > 0 ? "+" : "-";
+  return `${sign}M${Math.abs(mate)}`;
+}
+
 // Reasonable insight teaser based purely on evals — used when no LLM
 // narrative is available yet (eg. lichess game list cards).
 export function evalInsightText(evals) {

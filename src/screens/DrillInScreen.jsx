@@ -6,7 +6,7 @@ import { sanToSquares } from "../parseGame";
 import { FlagButton } from "../FlagButton";
 import { perMoveKey } from "../migrations";
 import { GameContext } from "../context";
-import { fmtSwing } from "../design";
+import { fmtSwing, fmtMate } from "../design";
 import {
   useKbz, Card, NavBar, Classification, ThemedBoard, EvalBar, HoverSparkline,
   Composer, ExtLinkIcon, CLASS_DEF, Annotated, stripAnnotations,
@@ -281,9 +281,9 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
       const moverColorForLine = plyIdx % 2 === 1 ? "white" : "black";
       const playedSan = currentMoment?.notation ?? currentPos.san;
       const engineLine = engData?.top_alternatives?.length
-        ? `Engine alternatives — moves ${moverColorForLine} could have played INSTEAD of ${playedSan} (these apply to the position BEFORE the move, where ${moverColorForLine} was to move):\n` +
+        ? `Engine alternatives — moves ${moverColorForLine} could have played INSTEAD of ${playedSan} (these apply to the position BEFORE the move, where ${moverColorForLine} was to move; eval in pawns, +Mn = forced mate in n half-moves):\n` +
           engData.top_alternatives.map((alt, i) => {
-            const ev = alt.mate != null ? (alt.mate > 0 ? "+M" : "-M") : fmtCp(alt.eval_cp);
+            const ev = alt.mate != null ? fmtMate(alt.mate) : fmtCp(alt.eval_cp);
             const cont = alt.pv_san?.slice(1, 4).join(" ");
             return `  ${i + 1}. ${alt.san} (${ev})${cont ? ` — continuation: ${cont}` : ""}`;
           }).join("\n") +
