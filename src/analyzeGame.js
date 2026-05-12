@@ -334,7 +334,8 @@ export async function analyzeSinglePosition({ summary, moveNumber, notation, cla
   const safetyRules = engineData ? `\nRules:
 - NEVER name a move anywhere in your response unless it appears verbatim in the engine alternatives or refutation provided above. If you cannot cite an engine-grounded move, describe the idea in words without naming the move.
 - The engine alternatives are moves ${moverColor} could have played BEFORE ${notation}. Do not suggest these as moves for ${otherColor} to play now.
-- Do not make claims about tactical motifs (pins, forks, skewers, discovered attacks) unless the geometry is visible in the provided engine lines.` : '';
+- Do not make claims about tactical motifs (pins, forks, skewers, discovered attacks) unless the geometry is visible in the provided engine lines.
+- The FEN above is ground truth for piece positions. Never describe a piece as being on a square unless it is on that square in the FEN. Do not infer piece locations from future moves in the PGN.` : '';
 
   const movedBy = perspective
     ? (moverIsUser ? `Move played by YOU (${moverColor}).` : `Move played by YOUR OPPONENT (${moverColor}).`)
