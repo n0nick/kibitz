@@ -157,11 +157,6 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
   const [chatSending, setChatSending] = useState(false);
   const chatEndRef = useRef(null);
 
-  useEffect(() => {
-    if (chatHistory.length > 0) {
-      try { sessionStorage.setItem(chatKey, JSON.stringify(chatHistory)); } catch {}
-    }
-  }, [chatHistory, chatKey]);
 
   const flip = perspective === "black";
   const fenBefore = positions[plyIdx - 1]?.fen;
@@ -219,7 +214,11 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
     return () => window.removeEventListener("keydown", onKey);
   }, [positions.length]);
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatHistory]);
+  const prevSendingRef = useRef(false);
+  useEffect(() => {
+    if (prevSendingRef.current && !chatSending) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    prevSendingRef.current = chatSending;
+  }, [chatSending]);
 
   const runAnalysis = async () => {
     if (!apiKey) return;
@@ -264,6 +263,7 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
   const sendChat = async (override) => {
     const q = ((override ?? chatInput) || "").trim();
     if (!q || chatSending || !apiKey) return;
+    const saveKey = chatKey; // capture before any await
     setChatSending(true);
     if (override == null) setChatInput("");
     const currentMsgs = [...chatHistory];
@@ -304,9 +304,17 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
           fen: fenCurrent, fenBefore, fenAfter, engineLine, perspective },
         apiKey
       );
-      setChatHistory((prev) => [...prev, { role: "assistant", text: answer, systemPrompt }]);
+      setChatHistory((prev) => {
+        const next = [...prev, { role: "assistant", text: answer, systemPrompt }];
+        try { sessionStorage.setItem(saveKey, JSON.stringify(next)); } catch {}
+        return next;
+      });
     } catch {
-      setChatHistory((prev) => [...prev, { role: "assistant", text: "Analysis failed. Check your API key." }]);
+      setChatHistory((prev) => {
+        const next = [...prev, { role: "assistant", text: "Analysis failed. Check your API key." }];
+        try { sessionStorage.setItem(saveKey, JSON.stringify(next)); } catch {}
+        return next;
+      });
     } finally {
       setChatSending(false);
     }
@@ -549,7 +557,7 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
         </div>
 
         {/* Coach prompt seed card */}
-        {apiKey && chatHistory.length === 0 && (
+        {apiKey && chatHistory.length === 0 && suggestedQ && (
           <div style={{ padding: "12px 16px 0" }}>
             <Card pad={14}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -564,10 +572,10 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
                   ✦
                 </div>
                 <div style={{ flex: 1, fontSize: 13, color: k.text }}>
-                  {suggestedQ ?? "Why did this feel right at the board?"}
+                  {suggestedQ}
                 </div>
                 <button
-                  onClick={() => sendChat(suggestedQ ?? "Why did this feel right at the board?")}
+                  onClick={() => sendChat(suggestedQ)}
                   disabled={chatSending}
                   style={{ background: "transparent", border: "none", color: k.accent, fontSize: 12, fontWeight: 600, cursor: chatSending ? "default" : "pointer", opacity: chatSending ? 0.5 : 1 }}
                 >
