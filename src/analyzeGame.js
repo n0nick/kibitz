@@ -3,12 +3,11 @@ import { fmtMate } from './design.js';
 
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-// v1.11 — DRY refactor of the four prompt builders: shared
-// formatEngineAlternatives + formatMover helpers, extracted JSON
-// field-spec constants, compressed perspective block. No behavioural
-// change intended; reduces per-call prompt size by ~150–200 tokens
-// (mostly from the trimmed perspective block).
-export const PROMPT_VERSION = "v1.11";
+// v1.12 — tighten suggestedQuestion spec to steer away from introspective
+// self-reflection questions ("Why did I choose X?", "How can I develop
+// the habit of Y?") toward questions about the POSITION or a transferable
+// PATTERN.
+export const PROMPT_VERSION = "v1.12";
 
 export const TONES = [
   { value: "beginner",     label: "Beginner",     desc: "Explain everything simply — no chess jargon, plain everyday language" },
@@ -252,7 +251,7 @@ const CARD_TEASER_SPEC = `ONE plain-language sentence summarising what happened.
 
 const EXPLANATION_SPEC = `2-3 short sentences explaining the MECHANISM on the board (what tactical/positional geometry was at play). Annotation-heavy: use [[square]], [[piece|square]], [[move|from-to]] to anchor every key square. MUST start as a self-contained sentence — never with a conjunction ('But', 'And', 'So', 'Yet', 'However') that depends on the headline above. Do NOT restate the swing, the classification, or the better-line move; the UI already shows those.`;
 
-const SUGGESTED_QUESTION_SPEC = `<omit unless there is a genuinely interesting tactical or strategic follow-up. Phrase it as the USER asking the coach in first person — eg. 'Why was h5 worse than developing the knight?' or 'How should I have defended the king instead?' — NEVER as the coach quizzing the user (eg. don't say 'Why didn't you defend your king?')>`;
+const SUGGESTED_QUESTION_SPEC = `<omit unless there's a genuinely interesting tactical or strategic follow-up about the POSITION or a transferable PATTERN. Phrase it as the user asking the coach in first person — eg. 'Why was h5 worse than developing the knight?' or 'How would I spot this mate pattern next time?'. NOT introspective ('Why did I choose check instead of mate?', 'How can I develop the habit of scanning?') and NOT the coach quizzing the user ('Why didn't you defend your king?').>`;
 
 // When momentEngineData is provided, produces the v1.2 engine-grounded prompt
 // (engine alternatives listed per moment, LLM forbidden from inventing moves).
