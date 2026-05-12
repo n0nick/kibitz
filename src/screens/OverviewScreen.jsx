@@ -327,7 +327,7 @@ export function OverviewScreen({
                 </button>
               )}
             </div>
-            <HoverSparkline data={evals} markIdx={turningIdx} h={68} onClickIdx={onDrillIn} />
+            <HoverSparkline data={perspective === 'black' ? evals.map(v => -v) : evals} markIdx={turningIdx} h={68} onClickIdx={onDrillIn} />
           </div>
         )}
 

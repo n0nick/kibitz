@@ -467,7 +467,7 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
                 {fmtSwing(evals[plyIdx - 1] ?? 0, evals[plyIdx], perspective)}
               </span>
             </div>
-            <HoverSparkline data={evals} markIdx={plyIdx} h={56} onClickIdx={setPlyIdx} />
+            <HoverSparkline data={perspective === 'black' ? evals.map(v => -v) : evals} markIdx={plyIdx} h={56} onClickIdx={setPlyIdx} />
 
             {/* Coach's read — soft paragraph below the sparkline. Hidden
                 when the headline already covers the entire explanation
