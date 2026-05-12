@@ -6,7 +6,7 @@ import { sanToSquares } from "../parseGame";
 import { FlagButton } from "../FlagButton";
 import { perMoveKey } from "../migrations";
 import { GameContext } from "../context";
-import { fmtSwing, fmtMate } from "../design";
+import { fmtSwing } from "../design";
 import {
   useKbz, Card, NavBar, Classification, ThemedBoard, EvalBar, HoverSparkline,
   Composer, ExtLinkIcon, CLASS_DEF, Annotated, stripAnnotations,
@@ -277,18 +277,6 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
         }).catch(() => null);
         if (engData) setRichEngData(engData);
       }
-      const fmtCp = (cp) => cp == null ? "?" : `${cp >= 0 ? "+" : ""}${(cp / 100).toFixed(1)}`;
-      const moverColorForLine = plyIdx % 2 === 1 ? "white" : "black";
-      const playedSan = currentMoment?.notation ?? currentPos.san;
-      const engineLine = engData?.top_alternatives?.length
-        ? `Engine alternatives — moves ${moverColorForLine} could have played INSTEAD of ${playedSan} (these apply to the position BEFORE the move, where ${moverColorForLine} was to move; eval in pawns, +Mn = forced mate in n half-moves):\n` +
-          engData.top_alternatives.map((alt, i) => {
-            const ev = alt.mate != null ? fmtMate(alt.mate) : fmtCp(alt.eval_cp);
-            const cont = alt.pv_san?.slice(1, 4).join(" ");
-            return `  ${i + 1}. ${alt.san} (${ev})${cont ? ` — continuation: ${cont}` : ""}`;
-          }).join("\n") +
-          `\nIf the user asks about a move not in this list, acknowledge that you don't have engine-verified analysis for it and respond cautiously based on general principles. Do not invent tactical sequences. These engine moves are NOT options for the side currently to move — they are alternatives the side that just moved could have chosen.`
-        : null;
 
       const moverColor = plyIdx % 2 === 1 ? "white" : "black";
       const moment = currentMoment ?? {
@@ -301,7 +289,7 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
 
       const { text: answer, systemPrompt } = await chatAboutPosition(
         { summary, moment, messages: currentMsgs, question: q, tone,
-          fen: fenCurrent, fenBefore, fenAfter, engineLine, perspective },
+          fen: fenCurrent, fenBefore, fenAfter, engineData: engData, perspective },
         apiKey
       );
       setChatHistory((prev) => {
