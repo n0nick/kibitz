@@ -161,7 +161,13 @@ export function OverviewScreen({
   const { k } = useKbz();
   const { positions, evals, summary, pgn, promptSentToLlm } = game;
   const moments = selectMoments(game.moments, evals, MAX_OVERVIEW_MOMENTS);
-  const [gameChatHistory, setGameChatHistory] = useState([]);
+  const chatKey = `chess-chat-game-${gameId}`;
+  const [gameChatHistory, setGameChatHistory] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(chatKey) ?? "[]"); } catch { return []; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem(chatKey, JSON.stringify(gameChatHistory)); } catch {}
+  }, [gameChatHistory, chatKey]);
   const [gameChatInput, setGameChatInput] = useState("");
   const [gameChatSending, setGameChatSending] = useState(false);
   const chatEndRef = useRef(null);

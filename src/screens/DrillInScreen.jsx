@@ -151,10 +151,17 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
   const [error, setError] = useState(false);
   const [expandedAlt, setExpandedAlt] = useState(null);
   const [hoverHighlight, setHoverHighlight] = useState(null);
+  const chatKey = `chess-chat-${gameId}-ply-${plyIdx}`;
   const [chatHistory, setChatHistory] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      try { sessionStorage.setItem(chatKey, JSON.stringify(chatHistory)); } catch {}
+    }
+  }, [chatHistory, chatKey]);
 
   const flip = perspective === "black";
   const fenBefore = positions[plyIdx - 1]?.fen;
@@ -175,7 +182,7 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
     setError(false);
     setExpandedAlt(null);
     setHoverHighlight(null);
-    setChatHistory([]);
+    try { setChatHistory(JSON.parse(sessionStorage.getItem(`chess-chat-${gameId}-ply-${plyIdx}`) ?? "[]")); } catch { setChatHistory([]); }
     setChatInput("");
     setChatSending(false);
     // Drill-in lives in the document scroll, not an inner scroller — jump

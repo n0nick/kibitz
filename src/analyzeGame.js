@@ -25,6 +25,7 @@ async function callApi(messages, apiKey, { system, maxTokens = 1024, model = DEF
     "Content-Type": "application/json",
     "x-api-key": apiKey,
     "anthropic-version": "2023-06-01",
+    "anthropic-beta": "prompt-caching-2024-07-31",
   };
   // Browser requires this header for direct API calls; Node does not
   if (typeof window !== "undefined") {
@@ -385,12 +386,18 @@ Reply in calm, editorial prose. Be concise. Use markdown structure where it help
 Keep the answer short — two short paragraphs at most.
 IMPORTANT: You have game-level context but not position-specific engine analysis for arbitrary positions. For strategic/narrative questions, answer from the context above. For specific tactical sequences not shown in the turning points, describe ideas in words rather than naming specific moves you cannot verify.`;
 
+  const cachedSystem = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
   const apiMessages = [
-    ...messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+    ...messages.map((m, i) => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: i === messages.length - 1
+        ? [{ type: "text", text: m.text, cache_control: { type: "ephemeral" } }]
+        : m.text,
+    })),
     { role: 'user', content: question },
   ];
 
-  const { text } = await callApi(apiMessages, apiKey, { system, maxTokens: 512 });
+  const { text } = await callApi(apiMessages, apiKey, { system: cachedSystem, maxTokens: 512 });
   return { text, systemPrompt: system };
 }
 
@@ -418,11 +425,17 @@ Reply in calm, editorial coach prose. Be concise — two short paragraphs at mos
 Annotate squares and moves with the standard markup so they highlight on the board: ${ANNOTATION_RULES}
 IMPORTANT: Only claim a move gives check or captures a piece if it genuinely does so in the given FEN. When an engine line is provided, use it as ground truth for tactical calculation.`;
 
+  const cachedSystem = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
   const apiMessages = [
-    ...messages.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text })),
+    ...messages.map((m, i) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: i === messages.length - 1
+        ? [{ type: "text", text: m.text, cache_control: { type: "ephemeral" } }]
+        : m.text,
+    })),
     { role: "user", content: question },
   ];
 
-  const { text } = await callApi(apiMessages, apiKey, { system, maxTokens: 512 });
+  const { text } = await callApi(apiMessages, apiKey, { system: cachedSystem, maxTokens: 512 });
   return { text, systemPrompt: system };
 }
