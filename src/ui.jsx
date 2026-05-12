@@ -401,6 +401,19 @@ export function NavBar({ title, subtitle, left, right }) {
 // veiling chat content) and an iOS-friendly safe-area inset.
 export function Composer({ value, onChange, onSend, placeholder, disabled, sticky = true }) {
   const { k } = useKbz();
+  const taRef = useRef(null);
+
+  // Auto-grow the textarea — measure scrollHeight and resize. Capped at
+  // 6 lines so very long pastes stop pushing the keyboard off screen.
+  const autosize = (el) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 150) + "px";
+  };
+  useEffect(() => { autosize(taRef.current); }, [value]);
+
+  const send = () => { if (!disabled && value?.trim()) onSend(); };
+
   return (
     <div
       style={{
@@ -415,7 +428,7 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, stick
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-end",
           gap: 8,
           padding: "8px 12px 8px 14px",
           borderRadius: 22,
@@ -426,11 +439,17 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, stick
             : "0 4px 14px rgba(60,40,20,0.06)",
         }}
       >
-        <input
-          type="text"
+        <textarea
+          ref={taRef}
+          rows={1}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !disabled && onSend()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
           placeholder={placeholder}
           disabled={disabled}
           style={{
@@ -439,19 +458,28 @@ export function Composer({ value, onChange, onSend, placeholder, disabled, stick
             background: "transparent",
             border: "none",
             outline: "none",
+            resize: "none",
             color: k.text,
             fontFamily: k.font.sans,
             fontSize: 14,
+            lineHeight: 1.4,
+            padding: "5px 0",
+            maxHeight: 150,
+            overflowY: "auto",
           }}
         />
         <button
-          onClick={onSend}
+          // Prevent the input from losing focus on mouse/touch down — on
+          // iOS, focus-loss dismisses the keyboard and swallows the click.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={send}
           disabled={disabled || !value?.trim()}
           aria-label="Send"
           style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            flexShrink: 0,
             background: k.accent,
             color: k.bg,
             fontSize: 14,
