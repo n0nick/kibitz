@@ -712,7 +712,7 @@ function parseAnnotation(raw, fenBefore, fenAfter) {
   const pipeIdx = raw.indexOf("|");
   if (pipeIdx !== -1) {
     const display = raw.slice(0, pipeIdx);
-    const parts = raw.slice(pipeIdx + 1).split("-");
+    const parts = raw.slice(pipeIdx + 1).split(/[-x]/);
     return { display, from: sq(parts[0]), to: sq(parts[1]) ?? null };
   }
   if (sq(raw)) return { display: raw, from: raw, to: null };
