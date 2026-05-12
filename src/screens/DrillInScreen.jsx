@@ -203,6 +203,10 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
     }
   }, [plyIdx, gameId, tone]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    window.history.replaceState(null, "", `?game=${gameId}&move=${plyIdx}`);
+  }, [plyIdx, gameId]);
+
   const touchStartX = useRef(null);
 
   useEffect(() => {
