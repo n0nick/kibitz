@@ -327,7 +327,10 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
     : `${Math.ceil(plyIdx / 2)}${plyIdx % 2 === 1 ? "." : "..."} ${currentPos?.san}`;
   const classification = currentMoment?.classification ?? "good";
   const cdef = CLASS_DEF[classification] ?? CLASS_DEF.good;
-  const suggestedQ = currentMoment?.qa?.question;
+  const suggestedQ = currentMoment?.qa?.question
+    ?? (['inaccuracy', 'mistake', 'blunder'].includes(classification)
+      ? `Why was this ${classification === 'inaccuracy' ? 'an' : 'a'} ${classification}?`
+      : null);
   // If the moment doesn't carry an explicit `headline` (older cache /
   // first ply analysis), fall back to the first sentence of the explanation
   // — and drop that sentence from the body so we don't show it twice.
