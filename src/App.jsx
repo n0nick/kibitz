@@ -21,6 +21,17 @@ import { DrillInScreen } from "./screens/DrillInScreen";
 // transitions between screens. Each screen is its own module under
 // src/screens.
 
+function inferPerspective(gameId, summary, lichessUser) {
+  const saved = localStorage.getItem(`kibitz-perspective-${gameId}`);
+  if (saved === 'white' || saved === 'black') return saved;
+  if (lichessUser) {
+    const user = lichessUser.toLowerCase();
+    if (summary.white?.toLowerCase() === user) return 'white';
+    if (summary.black?.toLowerCase() === user) return 'black';
+  }
+  return null;
+}
+
 export default function App() {
   const [apiKey, setApiKey] = useApiKey();
   const [tone, setTone] = useTone();
@@ -89,7 +100,7 @@ export default function App() {
           setLocalProgress(null);
           localStorage.removeItem(evalsKey(gameId));
           setGameData({ ...parsed, pgn, gameId });
-          if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, gameId);
+          if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, gameId, false, perspective);
           else setAnalysisStatus(null);
         }
       } catch { /* keep polling */ }
@@ -111,7 +122,7 @@ export default function App() {
           const reclassified = reclassifyWithEvals(gameData, data);
           setGameData(prev => ({ ...reclassified, pgn: prev?.pgn, gameId: prev?.gameId }));
           setLocalProgress(null);
-          if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId);
+          if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId, false, perspective);
           else setAnalysisStatus(null);
           return;
         }
@@ -128,7 +139,7 @@ export default function App() {
     localStorage.setItem(evKey, JSON.stringify({ data: reclassified.evals, ts: Date.now() }));
     setGameData(prev => ({ ...reclassified, pgn: prev?.pgn, gameId: prev?.gameId }));
     setLocalProgress(null);
-    if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId);
+    if (apiKey) runAnalysis(reclassified, null, apiKey, tone, gameId, false, perspective);
     else setAnalysisStatus(null);
   };
 
@@ -155,6 +166,8 @@ export default function App() {
       }
       const parsed = parseGame(pgn);
       addToHistory({ id, source: "lichess", white: parsed.summary.white, black: parsed.summary.black, result: parsed.summary.result });
+      const persp = inferPerspective(id, parsed.summary, lichessUser);
+      setPerspective(persp);
       const gameWithMeta = { ...parsed, pgn, gameId: id };
       if (!parsed.hasEvals) {
         setGameData(gameWithMeta);
@@ -173,7 +186,7 @@ export default function App() {
         window.history.replaceState(null, "", `?game=${id}`);
       }
       setScreen(resolveScreen(initialPly));
-      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force);
+      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force, persp);
     } catch (e) {
       setImportError(e.message);
       setScreen("import");
@@ -191,6 +204,8 @@ export default function App() {
       const id = pgnGameId(pgn);
       setCachedPgn(id, pgn);
       addToHistory({ id, source: "pgn", white: parsed.summary.white, black: parsed.summary.black, result: parsed.summary.result });
+      const persp = inferPerspective(id, parsed.summary, lichessUser);
+      setPerspective(persp);
       setGameData({ ...parsed, pgn, gameId: id });
       setGameId(id);
       if (initialPly !== null) {
@@ -205,15 +220,15 @@ export default function App() {
         return;
       }
       setScreen(resolveScreen(initialPly));
-      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force);
+      if (apiKey) runAnalysis(parsed, pgn, apiKey, tone, id, force, persp);
     } catch (e) {
       setImportError(e.message ?? "Invalid PGN");
       setScreen("import");
     }
   };
 
-  const runAnalysis = async (game, pgn, key, t, id, force = false) => {
-    const p = perspective ?? 'none';
+  const runAnalysis = async (game, pgn, key, t, id, force = false, persp = perspective) => {
+    const p = persp ?? 'none';
     const cacheKey = `kibitz-analysis-${id}-${t}-${DEFAULT_MODEL}-${PROMPT_VERSION}-${p}`;
     if (!force) {
       try {
@@ -233,7 +248,7 @@ export default function App() {
     }
     setAnalysisStatus("loading");
     try {
-      const { result, prompt, momentEngineData } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t, engine: browserEngine, perspective });
+      const { result, prompt, momentEngineData } = await analyzeWithClaude(game, pgn, { apiKey: key, tone: t, engine: browserEngine, perspective: persp });
       localStorage.setItem(cacheKey, JSON.stringify({ data: result, prompt, ts: Date.now() }));
       setGameData((prev) => prev ? { ...mergeAnalysis(prev, result), promptSentToLlm: prompt, momentEngineData } : prev);
       setAnalysisStatus("done");
@@ -242,14 +257,6 @@ export default function App() {
       setAnalysisStatus("error");
     }
   };
-
-  // Re-run analysis when perspective is first determined, since analysis may have
-  // run before perspective was set (race between perspective inference and analysis start).
-  useEffect(() => {
-    if (!perspective || !gameData?.moments || !apiKey) return;
-    runAnalysis(gameData, gameData.pgn, apiKey, tone, gameId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perspective]);
 
   const patchMomentExplanation = (momentId, explanation, singleAnalysisPrompt = null) => {
     setGameData((prev) => {
@@ -271,6 +278,7 @@ export default function App() {
   const handlePerspectiveSet = (p) => {
     setPerspective(p);
     try { localStorage.setItem(`kibitz-perspective-${gameId}`, p); } catch {}
+    if (apiKey && gameData) runAnalysis(gameData, gameData.pgn, apiKey, tone, gameId, false, p);
   };
 
   const handleDrillIn = (plyIdx) => {

@@ -37,9 +37,12 @@ function getWorker() {
     }
   };
   worker.onerror = (e) => {
-    if (pendingReject) pendingReject(new Error(e.message));
+    const prevReject = pendingReject;
     pendingResolve = null;
     pendingReject  = null;
+    worker = null;
+    engineReady = false;
+    prevReject?.(new Error(e.message ?? "Stockfish crashed"));
   };
   worker.postMessage("uci");
   worker.postMessage("isready");
@@ -66,8 +69,10 @@ export function analyzePosition(fen, depth = 12, numPv = 3) {
     const w = getWorker();
     if (pendingResolve) {
       w.postMessage("stop");
+      const prevReject = pendingReject;
       pendingResolve = null;
       pendingReject  = null;
+      prevReject?.(new Error("Superseded"));
     }
     currentBests = {};
     pendingResolve = (raw) => {
