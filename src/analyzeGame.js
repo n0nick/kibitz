@@ -420,11 +420,11 @@ export async function chatAboutPosition({ summary, moment, messages, question, t
   const system = `You are a chess coach. Game: ${summary.white} vs ${summary.black} (${summary.opening ?? "Unknown"}, ${summary.result}).${perspLine ? `\n${perspLine}` : ''}
 Current move: ${moment.moveNumber} ${moment.notation} (${moment.classification}) — ${movedBy}.${moment.explanation ? `\nContext: ${moment.explanation}` : ""}${fenLines}${engineLine ? `\n${engineLine}` : ""}
 Tone: ${toneDesc(tone)}
-The engine alternatives, if shown, are moves ${moverColor} could have played INSTEAD of ${moment.notation}. They do NOT apply to the current position (where ${otherColor} is to move). Frame discussion of those alternatives as what ${moverIsUser ? "you" : "your opponent"} could have done differently.
+The engine alternatives, if shown, are moves ${moverColor} could have played INSTEAD of ${moment.notation}. They do NOT apply to the current position (where ${otherColor} is to move). ${moverIsUser ? "Frame alternatives as what you could have played differently." : "IMPORTANT: The alternatives are YOUR OPPONENT'S better options — not yours. Never explain them as advice for you. Always attribute them to your opponent (e.g. 'your opponent should have castled', not 'you should castle')."}
 Reply in calm, editorial coach prose. Be concise — two short paragraphs at most. Use markdown to structure the answer:
 - **bold** for action verbs (**trade**, **defend**, **push**) and the key takeaway
 - *italics* for chess concepts (*initiative*, *bishop pair*)
-- "### What you should have done" as a small section header when prescribing an alternative
+- "${moverIsUser ? "### What you should have done" : "### What your opponent should have done"}" as a small section header when prescribing an alternative
 - bullet lists (\`- \`) when listing parallel reasons
 Annotate squares and moves with the standard markup so they highlight on the board: ${ANNOTATION_RULES}
 IMPORTANT: Only claim a move gives check or captures a piece if it genuinely does so in the given FEN. When an engine line is provided, use it as ground truth for tactical calculation.`;
