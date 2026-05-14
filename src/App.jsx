@@ -370,6 +370,7 @@ export default function App() {
           localProgress={localProgress}
           startLocalAnalysis={startLocalAnalysis}
           initialCard={overviewCard}
+          onRetryAnalysis={apiKey && gameData ? () => runAnalysis(gameData, gameData.pgn, apiKey, tone, gameId, true, perspective) : undefined}
         />
       </GameContext.Provider>
     );

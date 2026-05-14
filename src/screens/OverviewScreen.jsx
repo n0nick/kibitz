@@ -156,7 +156,7 @@ function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClic
 
 export function OverviewScreen({
   game, gameId, perspective, onPerspectiveSet, onReset, onDrillIn, onStartReview,
-  apiKey, tone, analysisStatus, localProgress, startLocalAnalysis,
+  apiKey, tone, analysisStatus, localProgress, startLocalAnalysis, onRetryAnalysis,
 }) {
   const { k } = useKbz();
   const { positions, evals, summary, pgn, promptSentToLlm } = game;
@@ -195,7 +195,7 @@ export function OverviewScreen({
       }, apiKey);
       setGameChatHistory((prev) => [...prev, { role: "assistant", text }]);
     } catch {
-      setGameChatHistory((prev) => [...prev, { role: "assistant", text: "Analysis failed. Check your API key." }]);
+      setGameChatHistory((prev) => [...prev, { role: "assistant", text: "Analysis failed." }]);
     } finally {
       setGameChatSending(false);
     }
@@ -254,7 +254,7 @@ export function OverviewScreen({
           <span>
             {analysisStatus === "loading" ? "Analyzing now…"
               : analysisStatus === "awaiting-evals" ? "Awaiting computer analysis"
-              : analysisStatus === "error" ? "Analysis failed — check API key"
+              : analysisStatus === "error" ? "Analysis failed"
               : "Computer-analysed · Stockfish"}
           </span>
           {perspective && (
@@ -346,9 +346,19 @@ export function OverviewScreen({
             </Editorial>
           ) : (
             <div style={{ fontSize: 13, color: k.textDim }}>
-              {analysisStatus === "error"
-                ? "Analysis failed. Check your API key."
-                : "The story will appear once analysis completes."}
+              {analysisStatus === "error" ? (
+                <>
+                  Analysis failed.{" "}
+                  {onRetryAnalysis && (
+                    <button
+                      onClick={onRetryAnalysis}
+                      style={{ background: "transparent", border: "none", color: k.accent, cursor: "pointer", padding: 0, fontSize: 13, fontWeight: 500, fontFamily: "inherit" }}
+                    >
+                      Retry
+                    </button>
+                  )}
+                </>
+              ) : "The story will appear once analysis completes."}
             </div>
           )}
         </div>

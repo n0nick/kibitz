@@ -304,7 +304,7 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
       });
     } catch {
       setChatHistory((prev) => {
-        const next = [...prev, { role: "assistant", text: "Analysis failed. Check your API key." }];
+        const next = [...prev, { role: "assistant", text: "Analysis failed." }];
         try { sessionStorage.setItem(saveKey, JSON.stringify(next)); } catch {}
         return next;
       });
@@ -510,7 +510,15 @@ export function DrillInScreen({ initialPly, gameId, apiKey, tone, perspective, o
                     Analyzing…
                   </div>
                 ) : error ? (
-                  <div style={{ fontSize: 13, color: k.bad }}>Analysis failed. Check your API key.</div>
+                  <div style={{ fontSize: 13, color: k.bad }}>
+                    Analysis failed.{" "}
+                    <button
+                      onClick={runAnalysis}
+                      style={{ background: "transparent", border: "none", color: k.accent, cursor: "pointer", padding: 0, fontSize: 13, fontWeight: 500, fontFamily: "inherit" }}
+                    >
+                      Retry
+                    </button>
+                  </div>
                 ) : !apiKey ? (
                   <div style={{ fontSize: 12, color: k.textDim }}>
                     Add an API key from settings to enable AI analysis.
