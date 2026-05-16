@@ -99,7 +99,10 @@ function PatternCard({ pattern }) {
 function TurningPointRow({ moment, position, evalBefore, evalAfter, flip, onClick, awaitingLlm }) {
   const { k } = useKbz();
   if (!position) return null;
-  const teaser = moment.card_teaser ?? stripAnnotations(moment.explanation ?? "");
+  // Belt-and-braces strip — the spec forbids [[annotations]] in card_teaser
+  // but the model occasionally slips them in. Strip so users never see raw
+  // bracket syntax on the card.
+  const teaser = stripAnnotations(moment.card_teaser ?? moment.explanation ?? "");
   const swingColor = moment.classification === "blunder"
     ? k.bad
     : moment.classification === "mistake"
